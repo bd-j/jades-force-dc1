@@ -1,0 +1,11 @@
+name: jadespho
+dependencies:
+  - pip
+  - ipython
+  - pytest
+  - numpy>=1.14.0
+  - scipy>=1.1.0
+  - astropy=3.0.4
+  - numba
+  - emcee
+  - future_fstrings
