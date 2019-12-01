@@ -30,8 +30,8 @@ project_dir = "/n/scratchlfs/eisenstein_lab/{}/jades_force/".format(os.environ['
 scratch_dir = pjoin(project_dir, "smoke_test", 'residual_images')
 os.makedirs(scratch_dir, exist_ok=True)
 
-_print = print
-print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=True)
+#_print = print
+#print = lambda *args,**kwargs: _print(*args,**kwargs, file=sys.stderr, flush=True)
 
 
 def plot_residuals(patch, residuals, vmin=None, vmax=None):
@@ -66,7 +66,7 @@ def plot_residuals(patch, residuals, vmin=None, vmax=None):
 
     savefn = pjoin(scratch_dir, 'residuals_grid.png')
     fig.savefig(savefn)
-    print(f'Plotted to {savefn}')
+    print('Plotted to {}'.format(savefn))
 
 
 def time_proposals(n_repeat=100, mpi_barrier=True):
@@ -92,7 +92,7 @@ def time_proposals(n_repeat=100, mpi_barrier=True):
         # use subcommunicator per-GPU?
         comm.barrier()
         if rank == 0:
-            print(f'Passed MPI barrier with {size} ranks')
+            print('Passed MPI barrier with {} ranks'.format(rank))
 
     start = time.time()
 
@@ -103,7 +103,7 @@ def time_proposals(n_repeat=100, mpi_barrier=True):
 
     end = time.time()
 
-    print(f'Elapsed: {end-start:.3g}s for {n_repeat} proposals')
+    print('Elapsed: {:.3g}s for {} proposals'.format(end-start, n_repeat))
 
 
 if __name__ == '__main__':
@@ -129,14 +129,14 @@ if __name__ == '__main__':
     if len(ret) == 3:
         chi2, chi2_derivs, residuals = ret
 
-        plot_residuals(patch, residuals)
+        #plot_residuals(patch, residuals)
 
     else:
         chi2, chi2_derivs = ret
 
     print(chi2, chi2_derivs)
 
-    #time_proposals()
+    time_proposals(mpi_barrier=False)
 
     #print(residuals[0][110,5])
 
