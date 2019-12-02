@@ -13,26 +13,34 @@ module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
 
 # --- Cuda ---
 module load cuda/10.1.243-fasrc01
+
+# --- Python ---
+# -without hdf5, matplotlib, others
+module load Anaconda3/5.0.1-fasrc01
+# -with hdf5, matplotlib, others
+# module load Anaconda3/5.0.1-fasrc02
 ```
 
 Create conda environment
 ====
 
 ```bash
-# --- Load Python and create a basic environment ---
-# -without hdf5, matplotlib, others
-module load Anaconda3/5.0.1-fasrc01
-# -with hdf5, matplotlib, others
-# module load Anaconda3/5.0.1-fasrc02
+# ---for installing environment to scratchlfs ---
+#CONDIR=/n/scratchlfs/eisenstein_lab/${USER}/envs
+#mkdir -p $CONDIR
+#conda env create -f jadespho_environment.yml -p ${CONDIR}/jadesfpho
+#source activate ${CONDIR}/jadesfpho
 
-conda env create -f jadespho_environment.yml #-p ~/jadespho
+# --- normal installation to home directory ---
+conda env create -f jadespho_environment.yml
 source activate jadespho
+
 # --- install things with HPC specific binaries ---
-pip install -v --no-binary=mpi4py mpi4py
 # CC=gcc HDF5_MPI="ON" HDF5_VERSION=1.10.5 pip install -v --no-binary=h5py h5py
 pip install -v --no-binary=h5py h5py
+#pip install -v --no-binary=mpi4py mpi4py   # This is causing issues.
 pip install pycuda
-conda install --freeze-installed pymc3
+pip install pymc3
 
 # --- install forcepho (optional, can be run from source direcory) ---
 git clone git@github.com:bd-j/forcepho.git
@@ -40,15 +48,22 @@ cd forcepho
 python setup.py install
 ```
 
-Then need to do
-```
-cp forcepho/*h ~/.conda/envs/jadespho/lib/python3.7/site-packages/forcepho-0.2-py3.7.egg/forcepho/
+If you've installed forcepho, then you need to do
+
+```bash
+pyv=3.6  # python version
+CONDIR=${HOME}/.conda/envs
+cp forcepho/*.h ${CONDIR}/jadespho/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
+cp forcepho/*.cu ${CONDIR}/jadespho/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
+cp forcepho/*.cc ${CONDIR}/jadespho/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
 ```
 
-to delete an env:
+This is something that eventually we can fix by including the c and cuda code as package data where the path will always be well defined.
 
-```
-conda remove --prefix ~/<env_name> --all
+To delete an env, e.g.:
+
+```bash
+conda remove --prefix ${CONDIR}/jadesfpho --all
 ```
 
 Compilation directories
@@ -57,16 +72,16 @@ Both pycuda and theano/pymc3 write compiled things to cache directories.
 The defaults are wherever you built the environment, which may be unwritable or slow during jobs.
 
 ```bash
-mkdir /n/scratchlfs/<group>/<user>/pycudacache
-mkdir /n/scratchlfs/<group>/<user>/theanocache
+mkdir /n/scratchlfs/<group>/${USER}/pycudacache
+mkdir /n/scratchlfs/<group>/${USER}/theanocache
 ```
 
-Then anytime you build a pycuda SourceModule add
+DEPRECATED: Then anytime you build a pycuda SourceModule add
 ```python
 SourceModule("""C code here """, cache_dir="/n/scratchlfs/.../<user>/bdjohnson/pycudacache/")
 ```
 
-and you also have to do something like
+Before running a job using pymnc3, you also have to do something like
 ```bash
 export THEANO_FLAGS="base_compiledir=/n/scratchlfs/.../<user>/theanocache/"
 ```
@@ -89,10 +104,16 @@ Single core job
 #SBATCH -o /n/scratchlfs/eisenstein_lab/bdjohnson/jades_force/logs/smoketest_%A_%a.out # Standard out goes to this file
 #SBATCH -e /n/scratchlfs/eisenstein_lab/bdjohnson/jades_force/logs/smoketest%A_%a.err # Standard err goes to this file
 
-MYSCRATCH=/n/scratchlfs/eisenstein_lab/$USER
-./ody_modules.sh
-export THEANO_FLAGS="base_compiledir=$MYSCRATCH/theanocache" #,floatX=float32"
+module purge
+module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
+module load Anaconda3/5.0.1-fasrc01
+
+MYSCRATCH=/n/scratchlfs/eisenstein_lab/${USER}
+export THEANO_FLAGS="base_compiledir=$MYSCRATCH/theanocache"
+#CONDIR=${MYSCRATCH}/envs
+#source activate ${CONDIR}/jadesfpho
 source activate jadespho
+
 date
 python run_patch_gpu_test_simple.py
 ```
@@ -105,13 +126,17 @@ srun -n $SLURM_NTASKS --mpi=pmi2 python run_patch_gpu_test_simple.py
 
 Interactive Job (Odyssey)
 =======
+
 ```bash
 srun --pty -p gpu -t 0-06:00 --mem 8000 --gres=gpu:1 /bin/bash
 ```
 
+Then you have to purge and reload all the modules by hand as they have the tendency to reload modules for you.
+
 From the odyssey docs: While on GPU node, you can run `nvidia-smi` to get information about the assigned GPU
 
 Not sure if it's necessary or how to enable MPS server.  On ascent one does
+
 ```bash
 -alloc_flags "gpumps"
 ```

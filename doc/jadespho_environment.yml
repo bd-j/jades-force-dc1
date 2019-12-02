@@ -1,4 +1,6 @@
 name: jadespho
+channels:
+  - conda-forge
 dependencies:
   - pip
   - ipython
@@ -7,5 +9,4 @@ dependencies:
   - scipy>=1.1.0
   - astropy=3.0.4
   - numba
-  - emcee
   - future_fstrings
