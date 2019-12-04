@@ -74,7 +74,7 @@ def make_individual_stamp(hdf5_file, filter_name, exp_name, psfpath=None, backgr
 
 def set_scene(sourcepars, fluxpars, filters, splinedata=None, free_sersic=True):
     """Build a scene from a set of source parameters and fluxes through a set of filters.
-    
+
     Returns
     -------
     scene: Scene object
