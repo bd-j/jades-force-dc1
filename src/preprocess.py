@@ -1,57 +1,44 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os, glob, sys
-from collections import namedtuple
+
 import numpy as np
 import argparse
 
+from stores import ImageNameSet, PixelStore, MetaStore
+
 parser = argparse.ArgumentParser()
 
-NameSet = namedtuple("Image", ["im", "err", "mask", "bkg"])
+
+def find_images():
+    search = '/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/br/udf_cube_*.slp.flat.fits'
+    import glob
+    files = glob.glob(search)
+    names = [ImageNameSet(f, f.replace("slp", "err"), "", f.replace("slp", "bkg")) for f in files]
+    return names
 
 
-def find_images(args):
+def flux_calibrate():
     pass
-
-def superpixelize(nameset, super_pixel_size=8):
-
-    hdr = fits.getheader(nameset["im"])
-    im = fits.getdata(nameset["im"])
-    bkg = fits.getdata(nameset["bkg"])
-    ierr = 1 / fits.getdata(nameset["err"])
-    mask = fits.getdata(nameset["mask"])
-    ierr *= (mask == 0)
-    im -= bkg
-
-    imsize = np.array(im.shape)
-    assert np.all(imsize == 2048)
-    nsuper = imsize / super_pixel_size
-
-    flux_images(im, ierr, hdr)
-
-    superpixels = np.array([nsuper[0], nsuper[1], 2 * super_pixel_size**2])
-    # slow 
-    for i in range(nsuper[0]):
-        for j in range(nsuper[1]):
-            I = i * super_pixel_size
-            J = j * super_pixel_size
-            
-            superpixels[i, j, 0:super_pixel_size**2] = im[I:I+super_pixel_size, J:J+super_pixel_size].flatten()
-
-    return hdr, superpixels
-
-
 
 if __name__ == "__main__":
 
-    args = parser.parse_args()
+    #args = parser.parse_args()
 
-    names = find_images(args)
+    names = find_images()
 
+    #pixelstore = PixelStore(pixelstorefile, nside_full=nside_full,
+    #                        super_pixel_size=super_pixel_size)
+
+    metastore = MetaStore()
     for n in names:
-        hdr, superpixels = pack_image(n)
-        band = hdr["Filter"]
-        h5.create_dataset(pixelpath, data=superpixels)
-        h5[pixelpath]
+        #pixelstore.add_exposure(n)
+        metastore.add_exposure(n)
+
+
+        #band = hdr["Filter"]
+        #exppath = 
+        #pixelstore.create_dataset(expID, data=superpixels)
+        #h5[pixelpath]
 
 

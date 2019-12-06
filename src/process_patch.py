@@ -57,6 +57,7 @@ class JadesPatch:
         self.pack_astrometry(hdrs, self.scene)
         self.pack_psf(hdrs, self.scene)
         self.pack_pixels(hdrs, region)
+        self.zerocoords(scene)
 
     def pack_source_metadata(self, scene, dtype=None):
         """
@@ -191,10 +192,10 @@ class JadesPatch:
         for band in bandlist:
             # TODO: Fill this in
             self.metastore
-            
 
     def find_pixels(self, hdr, region):
 
+        expID = hdr["EXPOSURE_ID"]
         # these are (nsuper, 4) arrays of the full pixel coordinates of the
         # corners of the superpixels
         xc = self.pixelstore.xcorners
@@ -206,9 +207,10 @@ class JadesPatch:
         supery = iny / self.pixelstore.super_pixel_size
 
         for i in len(superx):
-            pdata = self.pixelstore[expname][superx[i], supery[i], :]
+            pdata = self.pixelstore[expID][superx[i], supery[i], :]
             data = pdata[:nsuper]
             ierr = pdata[nsuper:]
+            # FIXME: finish this logic
             xpix = superx[i] * self.pixelstore.super_pixel_size + self.pixelstore
             ypix = self.pixelstore
 
@@ -246,74 +248,10 @@ class JadesPatch:
 
         return(scene)
 
-
-class PixelStore:
-
-    def __init__(self, h5file, nfull=2048, super_pixel_size=8):
-
-        self.h5 = h5py.open(h5file)
-        if nfull is None:
-            self.nfull = np.array(self.h5.attrs["nfull"], dtype=np.int32)
-        if super_pixel_size is None:
-            self.super_pixel_size = np.array(self.h5.attrs["super_pixel_size"], dtype=np.int32)
-
-        self.nside = self.nfull / self.super_pixel_size
-        nsuper = self.nside**2
-        ipix = np.arange(len(nsuper))
-        # TODO: check this is the proper order
-        xp = np.mod(ipix, self.nside) * self.super_pixel_size
-        yp = np.floor(ipix / self.nside) * self.super_pixel_size
-
-        # TODO: Check this is the proper order
-        self.xcorners = np.array([xp, xp+1, xp, xp+1]).T
-        self.ycorners = np.array([yp, yp, yp+1, yp+1]).T
-
-    @property
-    def data(self):
-        return self.h5
+def zerocoords(self, scene):
+    pass
 
 
-class MetaStore:
-
-    def __init__(self, hdrs=None):
-        bands = {}
-
-    def add_hdr(self, hdr):
-        band = hdr["FILTER"]
-        bands[band][hdr["NAME"]] = hdr
-
-
-
-class PSFStore:
-
-    def __init__(self, psfdata):
-        self.store = h5py.File(psfdata, "r")
-
-    def lookup(self, band, x, y, radii=None):
-        xp, yp = self.store[band]["pixel_grid"][:]
-        dist = np.hypot(x - xp, y - yp)
-        choose = dist.argmin()
-        pars = self.store[band]["psfs"][choose]
-        # TODO: assert data dtype is what's required
-        #assert pars.dtype.descr
-        return pars
-
-    def get_local_psf(self, hdr, source):
-        """
-
-        Returns
-        --------
-
-        A structured array of psf parameters for a given source in a give band.
-        The structure of the array is something like
-        amp, xcen, ycen, Cxx, Cyy Cxy, sersic_radius_index
-        """
-        band = hdr["FILTER"]
-        wcs = WCS(hdr)
-        x, y = wcs.all_world2pix(source.ra, source.dec)
-        psf = self.lookup(band, x, y, radii=None)
-
-        return psf
 
 
 class CircularRegion:

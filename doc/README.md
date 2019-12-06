@@ -106,6 +106,7 @@ Single core job
 
 module purge
 module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
+module load cuda/10.1.243-fasrc01
 module load Anaconda3/5.0.1-fasrc01
 
 MYSCRATCH=/n/scratchlfs/eisenstein_lab/${USER}
