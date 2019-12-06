@@ -111,7 +111,7 @@ class JadesPatch:
             wcs = WCS(hdr)
             self.crval[j] = wcs.crval
             self.crpix[j] = wcs.crpix
-            self.G[j] = hdr["data_to_mjy"]
+            self.G[j] = hdr["data_to_flux"]
             for i, source in enumerate(scene.sources):
                 CW_mat, D_mat = get_transform_mats(source, wcs)
                 self.D[j, i] = D_mat
@@ -195,25 +195,24 @@ class JadesPatch:
 
     def find_pixels(self, hdr, region):
 
-        expID = hdr["EXPOSURE_ID"]
+        band, expID = []
         # these are (nsuper, 4) arrays of the full pixel coordinates of the
         # corners of the superpixels
         xc = self.pixelstore.xcorners
         yc = self.pixelstore.ycorners
-        # this is just the full coordinates of the lower-left (zeroth) corner of
+        # this returns the full coordinates of the lower-left (zeroth) corner of
         # every pixel "contained" within a region
         inx, iny = region.contains(xc, yc, hdr)
         superx = inx / self.pixelstore.super_pixel_size
         supery = iny / self.pixelstore.super_pixel_size
 
         for i in len(superx):
-            pdata = self.pixelstore[expID][superx[i], supery[i], :]
+            pdata = self.pixelstore[path][superx[i], supery[i], :]
             data = pdata[:nsuper]
             ierr = pdata[nsuper:]
             # FIXME: finish this logic
-            xpix = superx[i] * self.pixelstore.super_pixel_size + self.pixelstore
-            ypix = self.pixelstore
-
+            xpix = self.pixelstore.xpix[superx[i], supery[i], :]
+            ypix = self.pixelstore.ypix[superx[i], supery[i], :]
 
     def set_scene(self, sourcepars, fluxpars, filters,
                   splinedata=None, free_sersic=True):
@@ -248,8 +247,8 @@ class JadesPatch:
 
         return(scene)
 
-def zerocoords(self, scene):
-    pass
+    def zerocoords(self, scene):
+        pass
 
 
 
@@ -263,11 +262,11 @@ class CircularRegion:
 
     def contains(self, xcorners, ycorners, hdr):
         """
-        xcorners: (nsuper, 4) array 
+        xcorners: (nsuper, 4) array
             the full pixel x coordinates of the corners of superpixels. (x, x+1, x, x+1)
         ycorners
             the full pixel `y` coordinates of the corners of superpixels (y, y, y+1, y+1)
-        
+
         hdr: header of the image including wcs information for the exposure in which to find pixels
         """
         # these oned pixel coordinate arrays should be cached in the
@@ -282,7 +281,6 @@ class CircularRegion:
         d2 = (xc - xcorners)**2 + (yc - ycorners)**2
         inreg = np.any(d2 < r2, axis=-1)
         return xcorners[inreg, 0], ycorners[inreg, 0]
-
 
 
 def get_transform_mats(source, wcs):

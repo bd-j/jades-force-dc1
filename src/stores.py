@@ -18,9 +18,9 @@ def header_to_id(hdr, nameset):
 
 class PixelStore:
     """Organization of the pixel data store is
-    
-    `bandID/expID/pixeldata`
-    
+
+    `bandID/expID/data`
+
     where `pixeldata` is an array of shape (nsuper, nsuper, 2 *
     super_pixel_size**2) The first half of the trailing dimension is the pixel
     flux information, while the second half is the ierr information. Each
@@ -28,11 +28,13 @@ class PixelStore:
     applied and some information about the subtracted background, mask, etc.
     """
 
-    def __init__(self, h5file, nside_full=2048, super_pixel_size=8, pix_dtype=None):
+    def __init__(self, h5file, nside_full=2048, super_pixel_size=8,
+                 pix_dtype=np.float64):
 
         self.h5file = h5file
         self.nside_full = nside_full
         self.super_pixel_size = super_pixel_size
+        self.pix_dtype = pix_dtype
 
         self.nside_super = self.nside_full / self.super_pixel_size
         self.xpix, self.ypix = self.pixel_coordinates()
@@ -45,7 +47,7 @@ class PixelStore:
             xpix, ypix = self.pixel_coordinates(imsize=imsize)
         # Full image coordinates of the super pixel corners
         xx = xpix[:, :, 0], xpix[:, :, -1]
-        yy = ypix[:, :, 0], ypix[:, :, -1]        
+        yy = ypix[:, :, 0], ypix[:, :, -1]
 
     def pixel_coordinates(self, imsize=None):
         if not imsize:
@@ -66,15 +68,16 @@ class PixelStore:
         # Read data and perform basic operations
         # FIXME: transpose these?
         im = fits.getdata(nameset.im)
-        bkg = fits.getdata(nameset.im)
+        bkg = fits.getdata(nameset.bkg)
         ierr = 1 / fits.getdata(nameset.err)
+        mask = ~(np.isfinite(ierr) & np.isfinite(im))
         if nameset.mask:
-            mask = fits.getdata(nameset.mask)
-            ierr *= (mask == 0)
+            mask *= fits.getdata(nameset.mask)
+        ierr *= (mask == 0)
         im -= bkg
         # this does nominal flux calibration of the image.
         # Returns the calibration factor applied
-        flux_conv = self.flux_calibration(im, ierr, hdr)
+        fluxconv = self.flux_calibration(im, ierr, hdr)
 
         # Superpixelize
         imsize = np.array(im.shape)
@@ -89,29 +92,40 @@ class PixelStore:
         # Put into the HDF5 file
         with h5py.File(self.h5file, "a") as h5:
             path = "{}/{}".format(band, expID)
-            pdat = h5.create_dataset(path, data=superpixels)
+            try:
+                exp = h5.create_group(path)
+            except(ValueError):
+                del h5[path]
+                print("deleted existing data for {}".format(path))
+                exp = h5.create_group(path)
+            pdat = exp.create_dataset("data", data=superpixels)
             pdat.attrs["counts_to_flux"] = fluxconv
-            for f in nameset._fields:
-                pdat.attrs[f] = nameset[f]
+            for i, f in enumerate(nameset._fields):
+                pdat.attrs[f] = nameset[i]
 
     def superpixelize(self, im, ierr, pix_dtype=None):
 
         super_pixel_size = self.super_pixel_size
+        s2 = super_pixel_size**2
         nsuper = (np.array(im.shape) / super_pixel_size).astype(int)
         if not pix_dtype:
             pix_dtype = self.pix_dtype
-        superpixels = np.empty([nsuper[0], nsuper[1], 2 * super_pixel_size**2], 
+        superpixels = np.empty([nsuper[0], nsuper[1], 2 * super_pixel_size**2],
                                dtype=pix_dtype)
-        # slow 
-        for i in range(nsuper[0]):
-            for j in range(nsuper[1]):
-                I = i * super_pixel_size
-                J = j * super_pixel_size
+        # slow
+        for ii in range(nsuper[0]):
+            for jj in range(nsuper[1]):
+                I = ii * super_pixel_size
+                J = jj * super_pixel_size
                 # TODO: check x,y ordering
-                superpixels[i, j, :super_pixel_size**2] = im[I:I+super_pixel_size, J:J+super_pixel_size].flatten()
-                superpixels[i, j, super_pixel_size**2:] = ierr[I:I+super_pixel_size, J:J+super_pixel_size].flatten()
+                superpixels[ii, jj, :s2] = im[I:(I + super_pixel_size),
+                                              J:(J + super_pixel_size)].flatten()
+                superpixels[ii, jj, s2:] = ierr[I:(I + super_pixel_size),
+                                                J:(J + super_pixel_size)].flatten()
         return superpixels
 
+    def flux_calibration(self, im, err, hdr):
+        return 1.0
 
     # Need better file handle treatment here.
     # should test for open file handle and return it, otherwise create and cache it
