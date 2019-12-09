@@ -8,6 +8,8 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 ImageNameSet = namedtuple("Image", ["im", "err", "mask", "bkg"])
+SOURCECAT_DTYPE = None
+EXP_FMT = "{}/{}"
 
 
 def header_to_id(hdr, nameset):
@@ -21,15 +23,15 @@ class PixelStore:
 
     `bandID/expID/data`
 
-    where `pixeldata` is an array of shape (nsuper, nsuper, 2 *
-    super_pixel_size**2) The first half of the trailing dimension is the pixel
-    flux information, while the second half is the ierr information. Each
-    dataset has attributes that describe the nominal flux calibration that was
-    applied and some information about the subtracted background, mask, etc.
+    where `data` is an array of shape (nsuper, nsuper, 2*super_pixel_size**2) 
+    The first half of the trailing dimension is the pixel flux information,
+    while the second half is the ierr information. Each dataset has attributes
+    that describe the nominal flux calibration that was applied and some
+    information about the subtracted background, mask, etc.
     """
 
     def __init__(self, h5file, nside_full=2048, super_pixel_size=8,
-                 pix_dtype=np.float64):
+                 pix_dtype=np.float32):
 
         self.h5file = h5file
         self.nside_full = nside_full
@@ -48,11 +50,12 @@ class PixelStore:
         # Full image coordinates of the super pixel corners
         xx = xpix[:, :, 0], xpix[:, :, -1]
         yy = ypix[:, :, 0], ypix[:, :, -1]
+        # FIXME: get all 4 corners
 
     def pixel_coordinates(self, imsize=None):
         if not imsize:
             imsize = [self.nside_full, self.nside_full]
-        # Note the order flip here
+        # NOTE: the order swap here for x, y
         yy, xx = np.meshgrid(np.arange(imsize[1]), np.arange(imsize[0]))
         packed = self.superpixelize(xx, yy)
         xpix = packed[:, :, :self.super_pixel_size**2]
@@ -60,24 +63,33 @@ class PixelStore:
         return xpix, ypix
 
     def add_exposure(self, nameset):
+        """Add an exposure to the pixel data store, including super-pixel
+        ordering.
 
+        Parameters
+        -------------
+
+        nameset : NamedTuple with attributes `im`, `err`, `bkg`, `mask`
+            A set of names (including path) for a given exposure.
+        """
         # Read the header and set identifiers
         hdr = fits.getheader(nameset.im)
         band, expID = header_to_id(hdr, nameset)
 
         # Read data and perform basic operations
-        # FIXME: transpose these?
-        im = fits.getdata(nameset.im)
-        bkg = fits.getdata(nameset.bkg)
-        ierr = 1 / fits.getdata(nameset.err)
+        # NOTE: we transpose to get a more familiar order where the x-axis
+        # (NAXIS1) is the first dimension and y is the second dimension.
+        im = np.array(fits.getdata(nameset.im)).T
+        bkg = np.array(fits.getdata(nameset.bkg)).T
+        ierr = 1 / np.array(fits.getdata(nameset.err)).T
         mask = ~(np.isfinite(ierr) & np.isfinite(im))
         if nameset.mask:
-            mask *= fits.getdata(nameset.mask)
+            mask *= np.array(fits.getdata(nameset.mask)).T
         ierr *= (mask == 0)
         im -= bkg
         # this does nominal flux calibration of the image.
         # Returns the calibration factor applied
-        fluxconv = self.flux_calibration(im, ierr, hdr)
+        fluxconv = self.flux_calibration(hdr)
 
         # Superpixelize
         imsize = np.array(im.shape)
@@ -89,7 +101,7 @@ class PixelStore:
         nsuper = imsize / self.super_pixel_size
         superpixels = self.superpixelize(im, ierr)
 
-        # Put into the HDF5 file
+        # Put into the HDF5 file; note this opens and closes the file
         with h5py.File(self.h5file, "a") as h5:
             path = "{}/{}".format(band, expID)
             try:
@@ -124,14 +136,14 @@ class PixelStore:
                                                 J:(J + super_pixel_size)].flatten()
         return superpixels
 
-    def flux_calibration(self, im, err, hdr):
+    def flux_calibration(self, hdr):
         return 1.0
 
     # Need better file handle treatment here.
     # should test for open file handle and return it, otherwise create and cache it
     @property
     def data(self):
-        return h5py.File(self.h5file, "r")
+        return h5py.File(self.h5file, "r", swmr=True)
 
 
 class MetaStore:
@@ -177,38 +189,61 @@ class MetaStore:
             headers[band] = {}
             for expID, h in sheaders[band].items():
                 headers[band][expID] = H.fromstring(h)
-        
+
         return headers
-            
 
 
 class PSFStore:
+    """Assumes existence of a file with the following structure
 
-    def __init__(self, psfdata):
-        self.store = h5py.File(psfdata, "r")
+    band/pixel_grid
+    band/psfs
 
-    def lookup(self, band, x, y, radii=None):
-        xp, yp = self.store[band]["pixel_grid"][:]
-        dist = np.hypot(x - xp, y - yp)
-        choose = dist.argmin()
-        pars = self.store[band]["psfs"][choose]
-        # TODO: assert data dtype is what's required
+    where psfs is a dataset like
+      psfs = np.zeros(nloc, nradii, ngauss, dtype=pdt)
+      pdt = np.dtype([('gauss_params', np.float, 6),
+                      ('sersic_bin', np.int32)])
+    and the order of gauss_params is given in patch.cu; amp, x, y, Cxx, Cyy, Cxy
+
+    In principle ngauss can depend on i_radius
+    """
+
+    def __init__(self, h5file):
+        self.h5file = h5file
+        self.filehandle = h5py.File(h5file, "r")
+
+    def lookup(self, band, xy=None):
+        """Returns a array of shape (nradii x ngauss,) with dtype
+        """
+        try:
+            x, y = xy
+            xp, yp = self.data[band]["detector_locations"][:]
+            dist = np.hypot(x - xp, y - yp)
+            choose = dist.argmin()
+        except:
+            choose = 0
+        pars = self.data[band]["parameters"][choose]
+        # TODO: assert data dtype is what's required for JadesPatch
         #assert pars.dtype.descr
         return pars
 
-    def get_local_psf(self, hdr, source):
+    def get_local_psf(self, band="F090W", source=None, wcs=None):
         """
-
         Returns
         --------
-
         A structured array of psf parameters for a given source in a give band.
         The structure of the array is something like
-        amp, xcen, ycen, Cxx, Cyy Cxy, sersic_radius_index
+        (amp, xcen, ycen, Cxx, Cyy Cxy, sersic_radius_index)
+        There are npsf_per_source rows in this array.
         """
-        band = hdr["FILTER"]
-        wcs = WCS(hdr)
-        x, y = wcs.all_world2pix(source.ra, source.dec)
-        psf = self.lookup(band, x, y, radii=None)
+        if wcs:
+            xy = wcs.all_world2pix(source.ra, source.dec)
+        else:
+            xy = None
+        psf = self.lookup(band, xy=xy)
 
         return psf
+
+    @property
+    def data(self):
+        return self.filehandle

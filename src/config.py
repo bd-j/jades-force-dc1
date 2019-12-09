@@ -19,8 +19,11 @@ splinedatafile = ""
 frames_directory = ""
 
 # ------------------------
+# --- PSF information ----
+
+# ------------------------
 # --- Data Types/Sizes ---
-pix_dtype = np.int32
+pix_dtype = np.float32
 meta_dtype = np.float32
 super_pixel_size = 8   # number of pixels along one side of a superpixel
 nfull = 2048           # number of pixels along one side of a square input frame
@@ -34,3 +37,4 @@ max_active_fraction = 0.1
 # --- HMC parameters ---
 nwarm = 250
 niter = 100
+ntune = 100

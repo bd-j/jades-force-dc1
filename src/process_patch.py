@@ -3,10 +3,16 @@
 
 import numpy as np
 
+from forcepho.sources import Scene
+from stores import MetaStore, PixelStore, PSFStore
+
 
 JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
 
+
+# should match order in patch.cu
+PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
 
 #from forcepho.patch import Patch
 #class JadesPatch(Patch):
@@ -20,13 +26,14 @@ class JadesPatch:
                  splinedata,
                  return_residual=False,
                  meta_dtype=np.float32,
-                 pix_dtype=np.int32,
-                 super_pixel_size=1):
+                 pix_dtype=np.float32,
+                 ):
 
         self.meta_dtype = meta_dtype
         self.pix_dtype = pix_dtype
-        self.splinedata = splinedata
+        self.return_residual = return_residual
 
+        self.splinedata = splinedata
         self.metastore = MetaStore(metastore)
         self.psfstore = PSFStore(psfstore)
         self.pixelstore = PixelStore(pixelstore)
@@ -35,8 +42,9 @@ class JadesPatch:
                       bandlist=JWST_BANDS,
                       mass_matrix=None):
 
+        self.bandlist = bandlist
         # Find relevant exposures
-        hdrs = self.find_exposures(region, bandlist)
+        hdrs, exposure_paths = self.find_exposures(region, self.bandlist)
 
         # Get BAND information for the exposures
         bands = [hdr["FILTER"] for hdr in hdrs]
@@ -56,8 +64,8 @@ class JadesPatch:
         self.pack_source_metadata(self.scene)
         self.pack_astrometry(hdrs, self.scene)
         self.pack_psf(hdrs, self.scene)
-        self.pack_pixels(hdrs, region)
-        self.zerocoords(scene)
+        self.pack_pixels(exposure_paths, region)
+        self.zerocoords(self.scene)
 
     def pack_source_metadata(self, scene, dtype=None):
         """
@@ -133,16 +141,18 @@ class JadesPatch:
         if not dtype:
             dtype = self.meta_dtype
         if not psf_dtype:
-            psf_dtype = np.dtype([('gauss_params', dtype, 6), 
-                                  ('sersic_bin', np.int32)])
+            psf_dtype = np.dtype([(c, dtype) for c in PSF_COLS] +
+                                 [("sersic_bin", np.int32)])
 
-        # FIXME: Fill these...
         self.n_psf_per_source = np.empty(self.n_bands, dtype=np.int32)
         self.psfgauss_start = np.zeros(self.n_exp, dtype=np.int32)
-
+        #n_psfgauss = self.n_psf_per_source.sum()*self.n_exp*self.n_sources
         self.psfgauss = np.empty(n_psfgauss, dtype=psf_dtype)
         s = 0
-        for j, hdr in enumerate(hdrs):
+        for e, hdr in enumerate(hdrs):
+            self.psfgauss_start[e] = s
+            band = hdr["FILTER"]
+            b = self.bandlist.index(band)
             for i, source in enumerate(scene.sources):
                 # sources have one set of psf gaussians per exposure
                 # length of that set is const in a band, however
@@ -150,6 +160,7 @@ class JadesPatch:
                 N = len(psfparams)
                 self.psfgauss[s: (s + N)] = psfparams
                 s += N
+            self.n_psf_per_source[b] = N
 
     def pack_pix(self, hdrs, region):
         self.band_start = np.empty(self.n_bands, dtype=np.int16)
@@ -166,6 +177,7 @@ class JadesPatch:
             self.band_N[b] += 1
             # Get pixel data from this exposure;
             # note these are in super-pixel ordder
+            # TODO: what if no pixels are found?
             pixdat = self.find_pixels(hdr, region)
             n_pix = len(pixdat[0])
             self.exposure_start[e] = i
@@ -186,33 +198,37 @@ class JadesPatch:
 
     def find_exposures(self, region, bandlist):
         """Return a list of headers (dict-like objects of wcs, filter, and
-        exposure id) for all exposures that overlap the region.  These should
-        be sorted by integer band_id.
+        exposure id) and exposureIDs for all exposures that overlap the region.
+        These should be sorted by integer band_id.
         """
         for band in bandlist:
             # TODO: Fill this in
-            self.metastore
+            for expID in self.metastore.wcs[band].keys():
+                path = "{}/{}".format(band, expID)     
 
-    def find_pixels(self, hdr, region):
-
-        band, expID = []
+    def find_pixels(self, exp_path, region):
+        """Find all super-pixels in an image described by `hdr` that are within
+        a given region, and return lists of the super-pixel data
+        """
         # these are (nsuper, 4) arrays of the full pixel coordinates of the
         # corners of the superpixels
         xc = self.pixelstore.xcorners
         yc = self.pixelstore.ycorners
-        # this returns the full coordinates of the lower-left (zeroth) corner of
-        # every pixel "contained" within a region
-        inx, iny = region.contains(xc, yc, hdr)
+        # this returns the full coordinates of the lower-left (zeroth) corner
+        # of every pixel "contained" within a region
+        inx, iny = region.contains(xc, yc, self.metastore.wcs[exp_path])
         superx = inx / self.pixelstore.super_pixel_size
         supery = iny / self.pixelstore.super_pixel_size
 
+        # this is iniefficient
         for i in len(superx):
-            pdata = self.pixelstore[path][superx[i], supery[i], :]
+            pdata = self.pixelstore.data[path][superx[i], supery[i], :]
             data = pdata[:nsuper]
             ierr = pdata[nsuper:]
             # FIXME: finish this logic
             xpix = self.pixelstore.xpix[superx[i], supery[i], :]
             ypix = self.pixelstore.ypix[superx[i], supery[i], :]
+        # FIXME: return lists or arrays of super-pixel data
 
     def set_scene(self, sourcepars, fluxpars, filters,
                   splinedata=None, free_sersic=True):
@@ -247,18 +263,42 @@ class JadesPatch:
 
         return(scene)
 
-    def zerocoords(self, scene):
-        pass
+    def zerocoords(self, scene, skyzero=None):
+        """Reset (in-place) the celestial zero point of the image metadata and
+        the source coordinates to avoid catastrophic cancellation errors in
+        coordinates when using single precision.
 
+        Parameters
+        ----------
+        scene:
+            A Scene object, where each source has the attributes `ra`, `dec`,
 
+        sky_zero: optional, 2-tuple of float64
+            The (ra, dec) values defining the new central coordinates.  These
+            will be subtracted from the relevant source and stamp coordinates.
+            If not given, the median coordinates of the scene will be used.
+        """
+        if not sky_zero:
+            zra = np.median([s.ra for s in scene.sources])
+            zdec = np.median([s.dec for s in scene.sources])
+            sky_zero = np.array([zra, zdec])
+
+        zero = np.array(sky_zero)
+        self.reference_coords = zero
+        for source in scene.sources:
+            source.ra -= zero[0]
+            source.dec -= zero[1]
+
+        # now subtract from all pixel metadata
+        self.crval -= zero[None, :]
 
 
 class CircularRegion:
 
     def __init__(self, ra, dec, radius):
-        self.ra = ra    # degrees
-        self.dec = dec  # degrees
-        self.radius = radius # degrees of arc
+        self.ra = ra          # degrees
+        self.dec = dec        # degrees
+        self.radius = radius  # degrees of arc
 
     def contains(self, xcorners, ycorners, hdr):
         """
