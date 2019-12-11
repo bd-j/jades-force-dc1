@@ -54,45 +54,52 @@ class JadesPatch(Patch):
         self.pixelstore = PixelStore(pixelstore)
 
         self.patch_reference_coordinates = np.zeros(2)
+        self.wcs_origin = 0
 
     def build_patch(self, region, sourcecat,
-                    bandlist=JWST_BANDS,
-                    mass_matrix=None):
+                    allbands=JWST_BANDS):
+        """Given a ragion and a source catalog, this method finds and packs up
+        all the relevant meta- and pixel-data in a format suitable for transfer
+        to the GPU
 
-        self.bandlist = bandlist
-        # Find relevant exposures
-        # The output should all be in band order
-        hdrs, wcses, exposure_paths = self.find_exposures(region, self.bandlist)
+        Parameters
+        ---------
+        """
+        # --- Find relevant exposures ---
+        # The output lists are all of length n_exp and should all be in band
+        # order
+        meta = self.find_exposures(region, allbands)
+        hdrs, wcses, epaths, bands = meta
 
-        # Get BAND information for the exposures
-        bands = [hdr["FILTER"] for hdr in hdrs]
+        # --- Get BAND information for the exposures ---
         # band_ids must be an int identifier (does not need to be contiguous)
-        band_ids = [self.bandlist.index(b) for b in bands]
+        band_ids = [allbands.index(b) for b in bands]
         assert (np.diff(band_ids) >= 0).all(), 'Exposures must be sorted by band'
         uniq_bands, n_exp_per_band = np.unique(band_ids, return_counts=True)
-        # In principle this is not required, as long as bandlist is re-indexed by uniq_bands
-        assert len(uniq_bands) == len(self.bandlist)
+        self.bandlist = [allbands[i] for i in uniq_bands]
 
+        # --- Set the scene ---
         self.scene = self.set_scene(sourcecat, uniq_bands, self.bandlist,
                                     splinedata=self.splinedata)
-
-        # Cache some useful numbers
-        self.n_bands = len(uniq_bands)       # Number of bands/filters
-        self.n_exp = len(hdrs)               # Number of exposures
-        self.n_sources = len(self.scene.sources)  # number of sources
-        self.band_N = np.zeros(self.n_bands, dtype=np.int16)
-        self.band_N[:] = n_exp_per_band
-
         # set a reference coordinate near center of scene;
         # subtract this from source coordinates
         self.patch_reference_coordinates = self.zerocoords(self.scene)
 
-        # Pack up all the data for the gpu
+        # --- Cache some useful numbers ---
+        self.n_bands = len(uniq_bands)       # Number of bands/filters
+        self.n_exp = len(hdrs)               # Number of exposures
+        self.n_sources = len(self.scene.sources)  # number of sources
+        # This gets overwritten by pack_pix
+        self.band_N = np.zeros(self.n_bands, dtype=np.int16)
+        self.band_N[:] = n_exp_per_band
+
+        # --- Pack up all the data for the gpu ---
         self.pack_source_metadata(self.scene)
         self.pack_astrometry(wcses, self.scene)
         self.pack_fluxcal(hdrs)
-        self.pack_pixels(wcses, region)
         self.pack_psf(bands, wcses, self.scene)
+
+        self.pack_pix(epaths, bands, wcses, region)
 
     def pack_source_metadata(self, scene, dtype=None):
         """
@@ -105,6 +112,10 @@ class JadesPatch(Patch):
         - self.n_sources
         - self.n_radii
         - self.rad2
+
+        Parameters
+        ---------
+        scene : A forcepho.sources.Scene() instance
         """
 
         if not dtype:
@@ -165,7 +176,7 @@ class JadesPatch(Patch):
             for j, hdr in enumerate(hdrs):
                 self.G[j] = hdr[tweakphot]
 
-    def pack_psf(self, hdrs, scene, dtype=None, psf_dtype=None):
+    def pack_psf(self, bands, wcses, scene, dtype=None, psf_dtype=None):
         """Each Sersic radius bin has a number of Gaussians associated with it
         from the PSF. The number of these will be constant in a given band, but
         the Gaussian parameters vary with source and exposure.
@@ -195,18 +206,18 @@ class JadesPatch(Patch):
         n_psfgauss = (self.n_psf_per_source * self.band_N * self.n_sources).sum()
         self.psfgauss = np.empty(n_psfgauss, dtype=psf_dtype)
         s = 0
-        for e, hdr in enumerate(hdrs):
+        for e, wcs in enumerate(wcses):
             self.psfgauss_start[e] = s
             for i, source in enumerate(scene.sources):
                 # sources have one set of psf gaussians per exposure
                 # length of that set is const in a band, however
-                psfparams = self.psfstore.get_local_psf(band=hdr["FILTER"], source=source)
+                psfparams = self.psfstore.get_local_psf(band=bands[e], source=source)
                 N = len(psfparams)
                 self.psfgauss[s: (s + N)] = psfparams
                 s += N
         assert s == n_psfgauss
 
-    def pack_pix(self, hdrs, region):
+    def pack_pix(self, epaths, bands, wcses, region, dtype=None):
         """We have super-pixel data in individual exposures that we want to
         pack into concatenated 1D pixel arrays.
 
@@ -223,6 +234,9 @@ class JadesPatch(Patch):
         - self.exposure_start [NEXP]  pixel index corresponding to the start of each exposure
         - self.exposure_N     [NEXP]  number of pixels (including warp padding) in each exposure
         """
+        if not dtype:
+            dtype = self.pix_dtype
+
         self.band_start = np.empty(self.n_bands, dtype=np.int16)
         self.band_N = np.zeros(self.n_bands, dtype=np.int16)
 
@@ -230,15 +244,25 @@ class JadesPatch(Patch):
         self.exposure_start = np.empty(self.n_exp, dtype=np.int32)
         self.exposure_N = np.empty(self.n_exp, dtype=np.int32)
 
+        # wish I knew how many superpixels there would be;
+        # could set an upper bound based on ragion area * nexp
+        #total_padded_size = region.area * n_exp
+        #self.xpix = np.zeros(total_padded_size, dtype=dtype)
+        #self.ypix = np.zeros(total_padded_size, dtype=dtype)
+        #self.data = np.zeros(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
+        #self.ierr = np.zeros(total_padded_size, dtype=dtype)  # 1/sigma
+        data, ierr, xpix, ypix = [], [], [], []
+
         b, i = 0, 0
-        for e, hdr in enumerate(hdrs):
+        for e, wcs in enumerate(wcses):
             # Get pixel data from this exposure;
             # NOTE: these are in super-pixel order
-            # TODO: Handle exposures with no pixels gracefully, 
+            # TODO: Handle exposures with no valid pixels gracefully,
             # or make sure they are not in the original list of headers
-            pixdat = self.find_pixels(hdr, region)
-            n_pix = len(pixdat[0])
-            if e > 0 and hdr["FILTER"] != hdrs[e-1]["FILTER"]:
+            pixdat = self.find_pixels(epaths[e], wcs, region)
+            # use size instead of len here because we are going to flatten everything
+            n_pix = pixdat[0].size
+            if e > 0 and bands[e] != bands[e - 1]:
                 b += 1
             self.band_N[b] += 1
             self.exposure_start[e] = i
@@ -249,26 +273,57 @@ class JadesPatch(Patch):
             ypix.append(pixdat[3])
             i += n_pix
 
+        #print(i)
         # FIXME set the dtype explicitly here
-        self.data = np.concatenate(data)
-        assert self.data.shape[0] == i, "pixel data array is not the right shape"
-        self.ierr = np.concatenate(ierr)
-        self.xpix = np.concatenate(xpix)
-        self.ypix = np.concatenate(ypix)
+        #total_padded_size = i
+        #self.xpix = np.zeros(total_padded_size, dtype=dtype)
+        #self.ypix = np.zeros(total_padded_size, dtype=dtype)
+        #self.data = np.zeros(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
+        #self.ierr = np.zeros(total_padded_size, dtype=dtype)  # 1/sigma
+        #np.concatenate(data, out=self.data)
+        self.data = np.concatenate(data)#.reshape(-1).astype(dtype)
+        #assert self.data.shape[0] == i, "pixel data array is not the right shape"
+        self.ierr = np.concatenate(ierr).reshape(-1).astype(dtype)
+        self.xpix = np.concatenate(xpix).reshape(-1).astype(dtype)
+        self.ypix = np.concatenate(ypix).reshape(-1).astype(dtype)
         self.band_start[0] = 0
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
 
-    def find_exposures(self, region, bandlist):
+    def find_exposures(self, region, bandlist, imsize=(2048, 2048)):
         """Return a list of headers (dict-like objects of wcs, filter, and
         exposure id) and exposureIDs for all exposures that overlap the region.
         These should be sorted by integer band_id.
         """
+        super_corners = self.pixelstore.superpixel_corners()
+        bra, bdec = region.bounding_box
+
+        epaths, bands, hdrs, wcses = [], [], [], []
         for band in bandlist:
             # TODO: Fill this in
             for expID in self.metastore.wcs[band].keys():
-                path = "{}/{}".format(band, expID)
+                epath = "{}/{}".format(band, expID)
+                wcs = self.metastore.wcs[band][expID]
+                # Check region bounding box has a corner in the exposure.
+                # NOTE: If bounding box entirely contains image this might fail
+                bx, by = wcs.all_world2pix(bra, bdec, self.wcs_origin)
+                inim = np.any((bx > 0) & (bx < imsize[0]) &
+                              (by > 0) & (by < imsize[1]))
+                if inim:
+                    # check in more detail
+                    sx, sy = region.contains(super_corners[..., 0],
+                                             super_corners[..., 1], wcs,
+                                             origin=self.wcs_origin)
+                    if len(sx) == 0:
+                        # skip this exposure
+                        continue
+                    wcses.append(wcs)
+                    epaths.append(epath)
+                    bands.append(band)
+                    hdrs.append(self.metastore.headers[band][expID])
+        return hdrs, wcses, epaths, bands
 
-    def find_pixels(self, epath, region):
+
+    def find_pixels(self, epath, wcs, region):
         """Find all super-pixels in an image described by `hdr` that are within
         a given region, and return lists of the super-pixel data
 
@@ -281,17 +336,18 @@ class JadesPatch(Patch):
         data, ierr, x, y
 
         """
+        s2 = self.pixelstore.super_pixel_size**2
         # this is a (nside, nside, 4, 2) array of the full pixel coordinates of
-        # the corners of the superpixels
+        # the corners of the superpixels:
         corners = self.pixelstore.superpixel_corners()
         # this returns the superpixel coordinates of every pixel "contained"
-        # within a region
-        sx, sy = region.contains(corners[..., 0], corners[..., 1], wcs)
-        pix = self.pixelstore.data[epath][sx, sy, :]
+        # within a region:
+        sx, sy = region.contains(corners[..., 0], corners[..., 1], wcs, origin=self.wcs_origin)
+        data = self.pixelstore.data[epath+"/data"][:]
         xpix = self.pixelstore.xpix[sx, sy, :]
         ypix = self.pixelstore.ypix[sx, sy, :]
 
-        return pix[:, :, :nsuper], pix[:, :, nsuper:], xpix, ypix
+        return data[sx, sy, :s2], data[sx, sy, s2:], xpix, ypix
 
     def set_scene(self, sourcepars, band_ids, filters,
                   splinedata=None, free_sersic=True):
@@ -379,16 +435,16 @@ class CircularRegion:
     contains methods that give a simple bounding box in celestial coordinates,
     and that can determine, given a wcs,  whether a set of pixel corners
     (in x, y) are contained within a region
-    
+
     Parameters
     ----------
-    
+
     ra : float
         Right Ascension of the center of the circle.  Degrees
-        
+
     dec : float
         The Declination of the center of the circle.  Degrees
-        
+
     radius : float
         The radius of the region, in degrees of arc.
     """
@@ -398,27 +454,22 @@ class CircularRegion:
         self.dec = dec        # degrees
         self.radius = radius  # degrees of arc
 
-    def contains(self, xcorners, ycorners, hdr):
+    def contains(self, xcorners, ycorners, wcs, origin=0):
         """
-        xcorners: (nsuper, 4) array
+        xcorners: (nsuper, nsuper, 4) ndarray
             the full pixel x coordinates of the corners of superpixels. (x, x+1, x, x+1)
-        ycorners
+        ycorners : (nsuper, nsuper, 4) ndarray
             the full pixel `y` coordinates of the corners of superpixels (y, y, y+1, y+1)
 
         hdr: header of the image including wcs information for the exposure in which to find pixels
         """
-        # these oned pixel coordinate arrays should be cached in the
-        # pixel store
-
         # Get the center and radius in pixel coodrinates
-        wcs = WCS(hdr)
-        xc, yc = wcs.all_world2pix(self.ra, self.dec)
-        xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius)
+        xc, yc = wcs.all_world2pix(self.ra, self.dec, origin)
+        xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius, origin)
         r2 = (xc - xr)**2 + (yc - yr)**2
-
         d2 = (xc - xcorners)**2 + (yc - ycorners)**2
         inreg = np.any(d2 < r2, axis=-1)
-        return xcorners[inreg][0], ycorners[inreg][0]
+        return np.where(inreg)
 
     @property
     def bounding_box(self):
@@ -428,7 +479,7 @@ class CircularRegion:
                    (self.ra + dra, self.dec - ddec),
                    (self.ra + dra, self.dec + ddec),
                    (self.ra - dra, self.dec + ddec)]
-        return np.array(corners)
+        return np.array(corners).T
 
 
 def get_transform_mats(source, wcs):

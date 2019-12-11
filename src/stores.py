@@ -106,12 +106,16 @@ class PixelStore:
         ierr = 1 / np.array(fits.getdata(nameset.err)).T
         mask = ~(np.isfinite(ierr) & np.isfinite(im))
         if nameset.mask:
-            mask *= np.array(fits.getdata(nameset.mask)).T
-        ierr *= (mask == 0)
+            mask = mask & np.array(fits.getdata(nameset.mask)).T
+        ierr[mask] = 0
         im -= bkg
+        # If we do this before then masked pixels will give a measure of the bkg...
+        ierr[mask] = 0
         # this does nominal flux calibration of the image.
         # Returns the calibration factor applied
         fluxconv = self.flux_calibration(hdr)
+        im *= fluxconv
+        ierr *= 1. / fluxconv
 
         # Superpixelize
         imsize = np.array(im.shape)
@@ -169,7 +173,11 @@ class PixelStore:
 
 
 class MetaStore:
+    """Storage for exposure meta data.
 
+         * headers - dictionary of FITS headers, keyed by band and then expID
+         * wcs - dictionary of wcs objects, keyed by band and expID
+    """
     def __init__(self, metastorefile=None):
         if not metastorefile:
             self.headers = {}

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os, glob, sys
+import time
 
 import numpy as np
 import argparse
@@ -33,6 +34,7 @@ def flux_calibrate():
 
 if __name__ == "__main__":
 
+    t = time.time()
     #parser = argparse.ArgumentParser()
     #config = parser.parse_args()
     from argparse import Namespace
@@ -59,9 +61,11 @@ if __name__ == "__main__":
     names = find_brants_images()
 
     # Fill pixel and metastores
-    for n in names[:1]:
+    for n in names:
         pixelstore.add_exposure(n)
         metastore.add_exposure(n)
 
     # Write the filled metastore
     metastore.write_to_file(config.metastorefile)
+
+    print(time.time() - t)
