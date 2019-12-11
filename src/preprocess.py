@@ -37,16 +37,15 @@ if __name__ == "__main__":
     #config = parser.parse_args()
     from argparse import Namespace
     config = Namespace()
-    config.psfstorefile = "stores/psf_test.h5"
     config.pixelstorefile = "stores/pixels_test.h5"
     config.metastorefile = "stores/meta_test.dat"
     config.nside_full = 2048
     config.super_pixel_size = 8
-    config.mixture_directory = "/Users/bjohnson/Projects/jades_force/data/psf/mixtures"
-    config.psf_search = "gmpsf*ng4.h5"
     config.pix_dtype = np.float32
     config.meta_dtype = np.float32
-    sys.exit()
+    #config.psfstorefile = "stores/psf_test.h5"
+    #config.mixture_directory = "/Users/bjohnson/Projects/jades_force/data/psf/mixtures"
+    #config.psf_search = "gmpsf*ng4.h5"
 
     # Make the (empty) PixelStore
     pixelstore = PixelStore(config.pixelstorefile,

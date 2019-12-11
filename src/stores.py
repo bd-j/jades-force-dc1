@@ -8,8 +8,18 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 ImageNameSet = namedtuple("Image", ["im", "err", "mask", "bkg"])
-SOURCECAT_DTYPE = None
+
 EXP_FMT = "{}/{}"
+
+
+def sourcecat_dtype(source_type=np.float64, bands=None):
+    nband = len(bands)
+    dt = [("id", np.int32)]
+    dt += [(c, source_type)
+           for c in ["ra", "dec", "q", "pa", "nsersic", "rhalf"]]
+    dt += [(c, source_type, nband)
+           for c in ["flux", "flux_unc"]]
+    return np.dtype(dt)
 
 
 def header_to_id(hdr, nameset):
@@ -42,15 +52,27 @@ class PixelStore:
         self.xpix, self.ypix = self.pixel_coordinates()
 
     def superpixel_corners(self, imsize=None):
+        """
+        Returns
+        ---------
+        corners : ndarray of shape (nside_super, nside_super, 4, 2)
+            The coordinates in the full array of the corners of each of the superpixels
+        """
         if not imsize:
             xpix, ypix = self.xpix, self.ypix
         else:
             # This is inefficient
             xpix, ypix = self.pixel_coordinates(imsize=imsize)
         # Full image coordinates of the super pixel corners
-        xx = xpix[:, :, 0], xpix[:, :, -1]
-        yy = ypix[:, :, 0], ypix[:, :, -1]
-        # FIXME: get all 4 corners
+        lower_left = np.array([xpix[:, :, 0], ypix[:, :, 0]])
+        offsets = np.array([(0, 0), (1, 0), (1, 1), (0, 1)]) * (self.super_pixel_size - 1)
+        corners = offsets[:, :, None, None] + lower_left[None, :, :, :]
+
+        #xx = xpix[:, :, 0], xpix[:, :, -1]
+        #yy = ypix[:, :, 0], ypix[:, :, -1]
+        # corners = np.array([(xx[0], yy[0]), (xx[1], yy[0]), (xx[1], yy[1]), (xx[0], yy[1])])
+
+        return corners.transpose(2, 3, 0, 1)
 
     def pixel_coordinates(self, imsize=None):
         if not imsize:
@@ -58,8 +80,8 @@ class PixelStore:
         # NOTE: the order swap here for x, y
         yy, xx = np.meshgrid(np.arange(imsize[1]), np.arange(imsize[0]))
         packed = self.superpixelize(xx, yy)
-        xpix = packed[:, :, :self.super_pixel_size**2]
-        ypix = packed[:, :, self.super_pixel_size**2:]
+        xpix = packed[:, :, :self.super_pixel_size**2].astype(np.int16)
+        ypix = packed[:, :, self.super_pixel_size**2:].astype(np.int16)
         return xpix, ypix
 
     def add_exposure(self, nameset):
@@ -210,7 +232,6 @@ class PSFStore:
 
     def __init__(self, h5file):
         self.h5file = h5file
-        self.filehandle = h5py.File(h5file, "r")
 
     def lookup(self, band, xy=None):
         """Returns a array of shape (nradii x ngauss,) with dtype
@@ -246,4 +267,4 @@ class PSFStore:
 
     @property
     def data(self):
-        return self.filehandle
+        return h5py.File(self.h5file, "r")
