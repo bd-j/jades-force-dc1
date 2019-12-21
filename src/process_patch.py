@@ -5,19 +5,18 @@ import numpy as np
 from astropy.wcs import WCS
 
 from forcepho.sources import Scene, Galaxy
-from stores import MetaStore, PixelStore, PSFStore
+from forcepho.patch import Patch
+from forcepho.stamp import scale_at_sky
 
+
+from stores import MetaStore, PixelStore, PSFStore
+from stores import PSF_COLS, PAR_COLS
 
 JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
 
 
-# should match order in patch.cu
-PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
-
-from forcepho.patch import Patch
 class JadesPatch(Patch):
-#class JadesPatch:
 
     """This class converts between JADES-like exposure level pixel data,
     meta-data (WCS), and PSF information to the data formats required by the
@@ -69,44 +68,55 @@ class JadesPatch(Patch):
         # The output lists are all of length n_exp and should all be in band
         # order
         meta = self.find_exposures(region, allbands)
-        hdrs, wcses, epaths, bands = meta
+        self.hdrs, self.wcses, self.epaths, self.bands = meta
 
         # --- Get BAND information for the exposures ---
         # band_ids must be an int identifier (does not need to be contiguous)
-        band_ids = [allbands.index(b) for b in bands]
+        band_ids = [allbands.index(b) for b in self.bands]
         assert (np.diff(band_ids) >= 0).all(), 'Exposures must be sorted by band'
-        uniq_bands, n_exp_per_band = np.unique(band_ids, return_counts=True)
-        self.bandlist = [allbands[i] for i in uniq_bands]
-
-        # --- Set the scene ---
-        self.scene = self.set_scene(sourcecat, uniq_bands, self.bandlist,
-                                    splinedata=self.splinedata)
-        # set a reference coordinate near center of scene;
-        # subtract this from source coordinates
-        self.patch_reference_coordinates = self.zerocoords(self.scene)
+        u, n = np.unique(band_ids, return_counts=True)
+        self.uniq_bands, self.n_exp_per_band = u, n
+        self.bandlist = [allbands[i] for i in self.uniq_bands]
 
         # --- Cache some useful numbers ---
-        self.n_bands = len(uniq_bands)       # Number of bands/filters
-        self.n_exp = len(hdrs)               # Number of exposures
-        self.n_sources = len(self.scene.sources)  # number of sources
-        # This gets overwritten by pack_pix
-        self.band_N = np.zeros(self.n_bands, dtype=np.int16)
-        self.band_N[:] = n_exp_per_band
+        self.n_bands = len(self.uniq_bands)       # Number of bands/filters
+        self.n_exp = len(self.hdrs)               # Number of exposures
 
         # --- Pack up all the data for the gpu ---
-        self.pack_source_metadata(self.scene)
-        self.pack_astrometry(wcses, self.scene)
-        self.pack_fluxcal(hdrs)
-        self.pack_psf(bands, wcses, self.scene)
+        self.pack_meta(sourcecat)
+        self.pack_pix(region)
 
-        self.pack_pix(epaths, bands, wcses, region)
+    def pack_meta(self, sourcecat):
+        """This method packs all the exposure and source metadata.  Most of
+        this data is scene/source dependent, so in this way we can change the
+        scene without repacking the pixel data.  This requires the following
+        attributes to have been set:
+        * splinedata
+        * uniq_bands  [NBAND]
+        * bandlist    [NBAND]
+        * wcses       [NEXP]
+        * hdrs        [NEXP]
+        * bands       [NEXP]
+        """
+        # --- Set the scene ---
+        self.scene = self.set_scene(sourcecat, self.uniq_bands, self.bandlist,
+                                    splinedata=self.splinedata)
+        # Set a reference coordinate near center of scene;
+        # Subtract this from source coordinates
+        self.patch_reference_coordinates = self.zerocoords(self.scene)
+        # Cache number of sources
+        self.n_sources = len(self.scene.sources)
+
+        self.pack_source_metadata(self.scene)
+        self.pack_astrometry(self.wcses, self.scene)
+        self.pack_fluxcal(self.hdrs)
+        self.pack_psf(self.bands, self.wcses, self.scene)
 
     def pack_source_metadata(self, scene, dtype=None):
-        """
-        We don't actually pack sources in the Patch; that happens
-        in a Proposal.  But we do have some global constants related
-        to sources, such as the total number of soures and number of
-        Sersic radii bins.  So we pack those here.
+        """We don't actually pack sources in the Patch; that happens
+        in a Proposal.  But we do have some global constants related to
+        sources, such as the total number of soures and number of Sersic
+        radii bins.  So we pack those here.
 
         Fills in:
         - self.n_sources
@@ -152,10 +162,13 @@ class JadesPatch(Patch):
         self.crval = np.empty((self.n_exp, 2), dtype=dtype)
 
         for j, wcs in enumerate(wcses):
+            # TODO - should do a better job getting a matched crpix/crval pair
+            # near the center of a patch
+            # TODO: Source specific crpix, crval pairs?
             self.crval[j] = wcs.wcs.crval - self.patch_reference_coordinates
             self.crpix[j] = wcs.wcs.crpix
             for i, source in enumerate(scene.sources):
-                CW_mat, D_mat = get_transform_mats(source, wcs)
+                CW_mat, D_mat = scale_at_sky([source.ra, source.dec], wcs)
                 self.D[j, i] = D_mat
                 self.CW[j, i] = CW_mat
 
@@ -203,7 +216,7 @@ class JadesPatch(Patch):
 
         # Make array for PSF parameters and index into that array
         self.psfgauss_start = np.zeros(self.n_exp, dtype=np.int32)
-        n_psfgauss = (self.n_psf_per_source * self.band_N * self.n_sources).sum()
+        n_psfgauss = (self.n_psf_per_source * self.n_exp_per_band * self.n_sources).sum()
         self.psfgauss = np.empty(n_psfgauss, dtype=psf_dtype)
         s = 0
         for e, wcs in enumerate(wcses):
@@ -217,7 +230,7 @@ class JadesPatch(Patch):
                 s += N
         assert s == n_psfgauss
 
-    def pack_pix(self, epaths, bands, wcses, region, dtype=None):
+    def pack_pix(self, region, dtype=None):
         """We have super-pixel data in individual exposures that we want to
         pack into concatenated 1D pixel arrays.
 
@@ -245,24 +258,20 @@ class JadesPatch(Patch):
         self.exposure_N = np.empty(self.n_exp, dtype=np.int32)
 
         # wish I knew how many superpixels there would be;
-        # could set an upper bound based on ragion area * nexp
+        # One could set an upper bound based on region area * nexp
         #total_padded_size = region.area * n_exp
         #self.xpix = np.zeros(total_padded_size, dtype=dtype)
-        #self.ypix = np.zeros(total_padded_size, dtype=dtype)
-        #self.data = np.zeros(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
-        #self.ierr = np.zeros(total_padded_size, dtype=dtype)  # 1/sigma
         data, ierr, xpix, ypix = [], [], [], []
 
         b, i = 0, 0
-        for e, wcs in enumerate(wcses):
+        for e, wcs in enumerate(self.wcses):
             # Get pixel data from this exposure;
             # NOTE: these are in super-pixel order
-            # TODO: Handle exposures with no valid pixels gracefully,
-            # or make sure they are not in the original list of headers
-            pixdat = self.find_pixels(epaths[e], wcs, region)
-            # use size instead of len here because we are going to flatten everything
+            pixdat = self.find_pixels(self.epaths[e], wcs, region)
+            # use size instead of len here because we are going to flatten.
             n_pix = pixdat[0].size
-            if e > 0 and bands[e] != bands[e - 1]:
+            assert n_pix > 0, "There were no valid pixels in exposure {}".format(self.epaths[e])
+            if e > 0 and self.bands[e] != self.bands[e - 1]:
                 b += 1
             self.band_N[b] += 1
             self.exposure_start[e] = i
@@ -274,15 +283,9 @@ class JadesPatch(Patch):
             i += n_pix
 
         #print(i)
-        # FIXME set the dtype explicitly here
-        #total_padded_size = i
-        #self.xpix = np.zeros(total_padded_size, dtype=dtype)
-        #self.ypix = np.zeros(total_padded_size, dtype=dtype)
-        #self.data = np.zeros(total_padded_size, dtype=dtype)  # value (i.e. flux) in pixel.
-        #self.ierr = np.zeros(total_padded_size, dtype=dtype)  # 1/sigma
-        #np.concatenate(data, out=self.data)
-        self.data = np.concatenate(data)#.reshape(-1).astype(dtype)
-        #assert self.data.shape[0] == i, "pixel data array is not the right shape"
+        # Flatten and set the dtype explicitly here
+        self.data = np.concatenate(data).reshape(-1).astype(dtype)
+        assert self.data.shape[0] == i, "pixel data array is not the right shape"
         self.ierr = np.concatenate(ierr).reshape(-1).astype(dtype)
         self.xpix = np.concatenate(xpix).reshape(-1).astype(dtype)
         self.ypix = np.concatenate(ypix).reshape(-1).astype(dtype)
@@ -320,8 +323,8 @@ class JadesPatch(Patch):
                     epaths.append(epath)
                     bands.append(band)
                     hdrs.append(self.metastore.headers[band][expID])
+        #return hdrs[:1], wcses[:1], epaths[:1], bands[:1]
         return hdrs, wcses, epaths, bands
-
 
     def find_pixels(self, epath, wcs, region):
         """Find all super-pixels in an image described by `hdr` that are within
@@ -376,11 +379,10 @@ class JadesPatch(Patch):
         scene: Scene object
         """
         #sourcepars = sourcepars.astype(np.float)
-
         # get all sources
         sources = []
         for ii, pars in enumerate(sourcepars):
-            gid, x, y, q, pa, n, rh, flux, unc = pars
+            gid, x, y, q, pa, n, rh, flux = [pars[f] for f in PAR_COLS]
             s = Galaxy(filters=filters, splinedata=splinedata,
                        free_sersic=free_sersic)
             s.global_id = gid
@@ -480,28 +482,3 @@ class CircularRegion:
                    (self.ra + dra, self.dec + ddec),
                    (self.ra - dra, self.dec + ddec)]
         return np.array(corners).T
-
-
-def get_transform_mats(source, wcs):
-    """Get source specific coordinate transformation matrices CW and D
-    """
-
-    # get dsky for step dx, dy = 1, 1
-    pos0_sky = np.array([source.ra, source.dec])
-    pos0_pix = wcs.wcs_world2pix([pos0_sky], 1)[0]
-    pos1_pix = pos0_pix + np.array([1.0, 0.0])
-    pos2_pix = pos0_pix + np.array([0.0, 1.0])
-    pos1_sky = wcs.wcs_pix2world([pos1_pix], 1)
-    pos2_sky = wcs.wcs_pix2world([pos2_pix], 1)
-
-    # compute dpix_dsky matrix
-    [[dx_dra, dx_ddec]] = (pos1_pix-pos0_pix) / (pos1_sky-pos0_sky)
-    [[dy_dra, dy_ddec]] = (pos2_pix-pos0_pix) / (pos2_sky-pos0_sky)
-    CW_mat = np.array([[dx_dra, dx_ddec], [dy_dra, dy_ddec]])
-
-    # compute D matrix
-    W = np.eye(2)
-    W[0, 0] = np.cos(np.deg2rad(pos0_sky[-1]))**-1
-    D_mat = 1.0 / 3600.0*np.matmul(W, CW_mat)
-
-    return(CW_mat, D_mat)

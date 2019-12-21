@@ -58,7 +58,7 @@ if __name__ == "__main__":
     metastore = MetaStore()
 
     # --- Find Images ---
-    names = find_brants_images()
+    names = find_brants_images(loc=config.frames_directory)
 
     # Fill pixel and metastores
     for n in names:

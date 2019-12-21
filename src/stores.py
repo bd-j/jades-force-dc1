@@ -11,14 +11,22 @@ ImageNameSet = namedtuple("Image", ["im", "err", "mask", "bkg"])
 
 EXP_FMT = "{}/{}"
 
+# should match order in patch.cu
+PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
+
+# name of GPU relevant parameters in the source catalog
+PAR_COLS = ["id", "ra", "dec", "q", "pa", "nsersic", "rhalf", "flux"]
+
 
 def sourcecat_dtype(source_type=np.float64, bands=None):
     nband = len(bands)
-    dt = [("id", np.int32)]
+    tags = ["id", "source_index", "is_active", "n_iter", "n_patch"]
+
+    dt = [(t, np.int32) for t in tags]
     dt += [(c, source_type)
            for c in ["ra", "dec", "q", "pa", "nsersic", "rhalf"]]
     dt += [(c, source_type, nband)
-           for c in ["flux", "flux_unc"]]
+           for c in ["flux"]]
     return np.dtype(dt)
 
 
@@ -92,7 +100,9 @@ class PixelStore:
         -------------
 
         nameset : NamedTuple with attributes `im`, `err`, `bkg`, `mask`
-            A set of names (including path) for a given exposure.
+            A set of names (including path) for a given exposure.  Values of
+            `None` or `False` for bkg and mask will result in no background
+            subtraction and no masking beyond NaNs and infs
         """
         # Read the header and set identifiers
         hdr = fits.getheader(nameset.im)
@@ -102,14 +112,15 @@ class PixelStore:
         # NOTE: we transpose to get a more familiar order where the x-axis
         # (NAXIS1) is the first dimension and y is the second dimension.
         im = np.array(fits.getdata(nameset.im)).T
-        bkg = np.array(fits.getdata(nameset.bkg)).T
         ierr = 1 / np.array(fits.getdata(nameset.err)).T
-        mask = ~(np.isfinite(ierr) & np.isfinite(im))
+        if nameset.bkg:
+            bkg = np.array(fits.getdata(nameset.bkg)).T
+            im -= bkg
+        # would be nice to keep masked pixels without bkg subtraction,
+        # so they provide a sampling of the background.
+        mask = ~(np.isfinite(ierr) & np.isfinite(im) & (ierr >= 0))
         if nameset.mask:
             mask = mask & np.array(fits.getdata(nameset.mask)).T
-        ierr[mask] = 0
-        im -= bkg
-        # If we do this before then masked pixels will give a measure of the bkg...
         ierr[mask] = 0
         # this does nominal flux calibration of the image.
         # Returns the calibration factor applied
@@ -163,7 +174,10 @@ class PixelStore:
         return superpixels
 
     def flux_calibration(self, hdr):
-        return 1.0
+        self.image_units = "nJy"
+        zp = hdr["ABMAG"]
+        conv = 1e9 * 10**(0.4 * (8.9 - zp))
+        return conv
 
     # Need better file handle treatment here.
     # should test for open file handle and return it, otherwise create and cache it
