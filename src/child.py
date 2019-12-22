@@ -2,9 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import logging
 
 from forcepho.proposal import Proposer
 from forcepho.model import GPUPosterior
+
+logger = logging.getLogger(__name__)
 
 
 def run_patch(patcher, region, fixedcat, activecat, config):

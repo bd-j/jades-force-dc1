@@ -11,7 +11,7 @@ from astropy import units as u
 
 from stores import sourcecat_dtype
 # TODO this should be in this module
-from process_patch import CircularRegion
+from region import CircularRegion
 
 
 class SuperScene:
@@ -21,7 +21,7 @@ class SuperScene:
     """
 
     def __init__(self, sourcecatfile, maxactive=20, nscale=3,
-                 maxradius=10., minradius=1, boundary_radius=15.):
+                 maxradius=5., minradius=1, boundary_radius=10.):
 
         self.filename = sourcecatfile
         self.ingest(sourcecatfile)
@@ -37,7 +37,7 @@ class SuperScene:
         # --- build the KDTree ---
         self.kdt = cKDTree(self.scene_coordinates)
 
-    def ingest(self, sourcecatfile, bands=None):
+    def ingest(self, sourcecatfile, bands=None, minrh=0.005):
         cat = fits.getdata(sourcecatfile)
         self.header = fits.getheader(sourcecatfile)
         self.bands = self.header["FILTERS"].split(",")
@@ -48,8 +48,13 @@ class SuperScene:
         for f in cat.dtype.names:
             if f in self.sourcecat.dtype.names:
                 self.sourcecat[f][:] = cat[f][:]
+        bad = ~np.isfinite(self.sourcecat["rhalf"])
+        self.sourcecat["rhalf"][bad] = minrh
+        bad = (self.sourcecat["rhalf"] < minrh)
+        self.sourcecat["rhalf"][bad] = minrh
 
-        # Sore the initial coordinates, which are used to set positional priors
+
+        # Store the initial coordinates, which are used to set positional priors
         self.ra0 = cat["ra"][:]
         self.dec0 = cat["dec"][:]
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
@@ -87,7 +92,7 @@ class SuperScene:
         center = self.sky_to_scene(cra, cdec)
         radius, active_inds, fixed_inds = self.get_circular_scene(center)
 
-        region = CircularRegion(cra, cdec, radius)
+        region = CircularRegion(cra, cdec, radius / 3600.)
         self.sourcecat["is_active"][active_inds] = True
 
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]

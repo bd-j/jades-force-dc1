@@ -63,6 +63,17 @@ class JadesPatch(Patch):
 
         Parameters
         ---------
+        region : forcepho.region.Region()
+            An instance of a `Region` object used to find relevant exposures
+            and pixels for the desired patch
+
+        sourcecat : structured array
+            A structured array describning the parameters of the sources in
+            the scene.  The relevant coliumns are given by stores.PAR_COLS
+ 
+        allbands : list of strings (optional)
+            The names of the bands in the `flux` column of the source cat,
+            corresponding to keys of the pixel and meta stores.
         """
         # --- Find relevant exposures ---
         # The output lists are all of length n_exp and should all be in band
@@ -302,7 +313,8 @@ class JadesPatch(Patch):
 
         epaths, bands, hdrs, wcses = [], [], [], []
         for band in bandlist:
-            # TODO: Fill this in
+            if band not in self.metastore.wcs.keys():
+                continue
             for expID in self.metastore.wcs[band].keys():
                 epath = "{}/{}".format(band, expID)
                 wcs = self.metastore.wcs[band][expID]
@@ -430,55 +442,9 @@ class JadesPatch(Patch):
         # now subtract from all pixel metadata
         #self.crval -= zero[None, :]
 
+    def unzerocoords(self, scene):
+        zero = self.patch_reference_coordinates
+        for source in scene.sources:
+            source.ra -= zero[0]
+            source.dec -= zero[1]
 
-class CircularRegion:
-
-    """An object that defines a circular region in celestial coordinates.  It
-    contains methods that give a simple bounding box in celestial coordinates,
-    and that can determine, given a wcs,  whether a set of pixel corners
-    (in x, y) are contained within a region
-
-    Parameters
-    ----------
-
-    ra : float
-        Right Ascension of the center of the circle.  Degrees
-
-    dec : float
-        The Declination of the center of the circle.  Degrees
-
-    radius : float
-        The radius of the region, in degrees of arc.
-    """
-
-    def __init__(self, ra, dec, radius):
-        self.ra = ra          # degrees
-        self.dec = dec        # degrees
-        self.radius = radius  # degrees of arc
-
-    def contains(self, xcorners, ycorners, wcs, origin=0):
-        """
-        xcorners: (nsuper, nsuper, 4) ndarray
-            the full pixel x coordinates of the corners of superpixels. (x, x+1, x, x+1)
-        ycorners : (nsuper, nsuper, 4) ndarray
-            the full pixel `y` coordinates of the corners of superpixels (y, y, y+1, y+1)
-
-        hdr: header of the image including wcs information for the exposure in which to find pixels
-        """
-        # Get the center and radius in pixel coodrinates
-        xc, yc = wcs.all_world2pix(self.ra, self.dec, origin)
-        xr, yr = wcs.all_world2pix(self.ra, self.dec + self.radius, origin)
-        r2 = (xc - xr)**2 + (yc - yr)**2
-        d2 = (xc - xcorners)**2 + (yc - ycorners)**2
-        inreg = np.any(d2 < r2, axis=-1)
-        return np.where(inreg)
-
-    @property
-    def bounding_box(self):
-        dra = self.radius / np.cos(np.deg2rad(self.dec))
-        ddec = self.radius
-        corners = [(self.ra - dra, self.dec - ddec),
-                   (self.ra + dra, self.dec - ddec),
-                   (self.ra + dra, self.dec + ddec),
-                   (self.ra - dra, self.dec + ddec)]
-        return np.array(corners).T
