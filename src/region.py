@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""region.py
+
+Define region objects that can be used to find relevant exposures and pixels
+for a given patch or area of the sky given in celestial coordinates.
+"""
+
+
 import numpy as np
 
 

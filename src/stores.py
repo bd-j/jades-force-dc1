@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+"""stores.py
+
+Interface with data on disk through storage objects.
+"""
+
 import os
 from collections import namedtuple
 import numpy as np

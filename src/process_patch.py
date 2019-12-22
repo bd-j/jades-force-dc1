@@ -8,7 +8,6 @@ from forcepho.sources import Scene, Galaxy
 from forcepho.patch import Patch
 from forcepho.stamp import scale_at_sky
 
-
 from stores import MetaStore, PixelStore, PSFStore
 from stores import PSF_COLS, PAR_COLS
 
