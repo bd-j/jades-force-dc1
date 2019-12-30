@@ -70,7 +70,8 @@ class PixelStore:
         Returns
         ---------
         corners : ndarray of shape (nside_super, nside_super, 4, 2)
-            The coordinates in the full array of the corners of each of the superpixels
+            The coordinates in the full array of the corner pixels of each of
+            the superpixels.
         """
         if not imsize:
             xpix, ypix = self.xpix, self.ypix
@@ -90,7 +91,7 @@ class PixelStore:
 
     def pixel_coordinates(self, imsize=None):
         if not imsize:
-            imsize = [self.nside_full, self.nside_full]
+            imsize = (self.nside_full, self.nside_full)
         # NOTE: the order swap here for x, y
         yy, xx = np.meshgrid(np.arange(imsize[1]), np.arange(imsize[0]))
         packed = self.superpixelize(xx, yy)
@@ -98,9 +99,11 @@ class PixelStore:
         ypix = packed[:, :, self.super_pixel_size**2:].astype(np.int16)
         return xpix, ypix
 
-    def add_exposure(self, nameset):
-        """Add an exposure to the pixel data store, including super-pixel
-        ordering.
+    def add_exposure(self, nameset, bitmask=None):
+        """Add an exposure to the pixel data store, including background
+        subtraction (if `nameset.bkg`), flux conversion, setting ierr for masked
+        pixels to 0, and super-pixel ordering.  This opens the HDF5 files, adds
+        the image data, and closes the file.
 
         Parameters
         -------------
@@ -122,12 +125,16 @@ class PixelStore:
         if nameset.bkg:
             bkg = np.array(fits.getdata(nameset.bkg)).T
             im -= bkg
-        # would be nice to keep masked pixels without bkg subtraction,
-        # so they provide a sampling of the background.
         mask = ~(np.isfinite(ierr) & np.isfinite(im) & (ierr >= 0))
         if nameset.mask:
-            mask = mask & np.array(fits.getdata(nameset.mask)).T
+            pmask = np.array(fits.getdata(nameset.mask)).T
+            if bitmask:
+                # just check that any of the bad bits are set
+                pmask = np.bitwise_and(pmask, bitmask) != 0
+            mask = mask | pmask
         ierr[mask] = 0
+        # masked pixels provide a sampling of the background
+        im[mask] = bkg[mask]
         # this does nominal flux calibration of the image.
         # Returns the calibration factor applied
         fluxconv = self.flux_calibration(hdr)
@@ -159,7 +166,8 @@ class PixelStore:
                 pdat.attrs[f] = nameset[i]
 
     def superpixelize(self, im, ierr, pix_dtype=None):
-
+        """Take native image data and reshape into super-pixel order
+        """
         super_pixel_size = self.super_pixel_size
         s2 = super_pixel_size**2
         nsuper = (np.array(im.shape) / super_pixel_size).astype(int)
@@ -167,12 +175,11 @@ class PixelStore:
             pix_dtype = self.pix_dtype
         superpixels = np.empty([nsuper[0], nsuper[1], 2 * super_pixel_size**2],
                                dtype=pix_dtype)
-        # slow
+        # slow, could be done with a reshape...
         for ii in range(nsuper[0]):
             for jj in range(nsuper[1]):
                 I = ii * super_pixel_size
                 J = jj * super_pixel_size
-                # TODO: check x,y ordering
                 superpixels[ii, jj, :s2] = im[I:(I + super_pixel_size),
                                               J:(J + super_pixel_size)].flatten()
                 superpixels[ii, jj, s2:] = ierr[I:(I + super_pixel_size),
@@ -182,6 +189,7 @@ class PixelStore:
     def flux_calibration(self, hdr):
         self.image_units = "nJy"
         zp = hdr["ABMAG"]
+        # math from Sandro
         conv = 1e9 * 10**(0.4 * (8.9 - zp))
         return conv
 
@@ -220,6 +228,15 @@ class MetaStore:
         self.headers[band][expID] = hdr
 
     def write_to_file(self, filename):
+        """Convert the FITS headers in the dictionary to strings, and dump the
+        dictionary to a file using JSON.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the file fro the metadata.  Will be overwritten if it
+            already exists
+        """
         import json
         hstrings = {}
         for band in self.headers.keys():
@@ -230,6 +247,8 @@ class MetaStore:
             json.dump(hstrings, f)
 
     def read_from_file(self, filename):
+        """Read a json serialized dictionary of string headers
+        """
         H = fits.Header()
         import json
         headers = {}
