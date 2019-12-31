@@ -137,7 +137,7 @@ class PixelStore:
         im[mask] = bkg[mask]
         # this does nominal flux calibration of the image.
         # Returns the calibration factor applied
-        fluxconv = self.flux_calibration(hdr)
+        fluxconv, unitname = self.flux_calibration(hdr)
         im *= fluxconv
         ierr *= 1. / fluxconv
 
@@ -162,6 +162,9 @@ class PixelStore:
                 exp = h5.create_group(path)
             pdat = exp.create_dataset("data", data=superpixels)
             pdat.attrs["counts_to_flux"] = fluxconv
+            pdat.attrs["flux_units"] = unitname
+            if bitmasK:
+                pdat.attrs["bitmask_applied"] = bitmask
             for i, f in enumerate(nameset._fields):
                 pdat.attrs[f] = nameset[i]
 
@@ -187,11 +190,11 @@ class PixelStore:
         return superpixels
 
     def flux_calibration(self, hdr):
-        self.image_units = "nJy"
+        image_units = "nJy"
         zp = hdr["ABMAG"]
         # math from Sandro
         conv = 1e9 * 10**(0.4 * (8.9 - zp))
-        return conv
+        return conv, image_units
 
     # Need better file handle treatment here.
     # should test for open file handle and return it, otherwise create and cache it
