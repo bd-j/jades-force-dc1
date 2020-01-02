@@ -3,7 +3,8 @@
 #SBATCH -n 1 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH --mem-per-cpu=2000 # Memory per node in MB (see also --mem-per-cpu)
-#SBATCH -p shared,test,conroy # Partition to submit to
+#SBATCH -p shared,test # Partition to submit to
+#SBATCH --account=eisenstein_lab
 #SBATCH -t 06:00:00 # Runtime
 #SBATCH -J preprocess_jades
 #SBATCH -o /n/scratchlfs02/eisenstein_lab/bdjohnson/jades_force/logs/preprocess_%A_%a.out # Standard out goes to this file

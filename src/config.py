@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""config.py - Example configuration script for forcepho runs.
+"""
+
 import numpy as np
 from argparse import Namespace
 config = Namespace()
@@ -21,7 +24,7 @@ config.pixelstorefile = "stores/pixels_test.h5"
 config.metastorefile = "stores/meta_test.dat"
 config.splinedatafile = "stores/sersic_mog_model.smooth=0.0150.h5"
 config.frames_directory = ""
-config.initial_catalog = "/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/source_catalogs/photometry_table_psf_matched_v1.0.fits"
+config.initial_catalog = ""
 
 # ------------------------
 # --- Data Types/Sizes ---

@@ -8,8 +8,8 @@ from forcepho.sources import Scene, Galaxy
 from forcepho.patch import Patch
 from forcepho.stamp import scale_at_sky
 
-from stores import MetaStore, PixelStore, PSFStore
-from stores import PSF_COLS, PAR_COLS
+from storage import MetaStore, PixelStore, PSFStore
+from storage import PSF_COLS, PAR_COLS
 
 JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
@@ -68,8 +68,8 @@ class JadesPatch(Patch):
 
         sourcecat : structured array
             A structured array describning the parameters of the sources in
-            the scene.  The relevant coliumns are given by stores.PAR_COLS
- 
+            the scene.  The relevant columns are given by `storage.PAR_COLS`
+
         allbands : list of strings (optional)
             The names of the bands in the `flux` column of the source cat,
             corresponding to keys of the pixel and meta stores.
@@ -154,8 +154,9 @@ class JadesPatch(Patch):
     def pack_astrometry(self, wcses, scene, dtype=None):
         """The sources need to know their local astrometric transformation
         matrices (and photometric conversions) in each exposure. We need to
-        calculate these from header/meta information and send data to the GPU so
-        it can apply the sky-to-pixel transformations to compare with the image.
+        calculate these from header/meta information and send data to the GPU
+        so it can apply the sky-to-pixel transformations to compare with the
+        image.
 
         Fills in the following arrays:
         - self.D
@@ -356,8 +357,9 @@ class JadesPatch(Patch):
         corners = self.pixelstore.superpixel_corners()
         # this returns the superpixel coordinates of every pixel "contained"
         # within a region:
-        sx, sy = region.contains(corners[..., 0], corners[..., 1], wcs, origin=self.wcs_origin)
-        data = self.pixelstore.data[epath+"/data"][:]
+        sx, sy = region.contains(corners[..., 0], corners[..., 1],
+                                 wcs, origin=self.wcs_origin)
+        data = self.pixelstore.data[epath + "/data"][:]
         xpix = self.pixelstore.xpix[sx, sy, :]
         ypix = self.pixelstore.ypix[sx, sy, :]
 
@@ -446,4 +448,3 @@ class JadesPatch(Patch):
         for source in scene.sources:
             source.ra -= zero[0]
             source.dec -= zero[1]
-

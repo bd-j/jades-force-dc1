@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""stores.py
+"""storage.py
 
 Interface with data on disk through storage objects.
 """

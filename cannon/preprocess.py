@@ -8,7 +8,7 @@ import numpy as np
 import argparse
 from h5py import File
 
-from stores import ImageNameSet, PixelStore, MetaStore
+from storage import ImageNameSet, PixelStore, MetaStore
 
 
 def find_brants_images(loc="/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/br/"):

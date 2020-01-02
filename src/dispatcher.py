@@ -9,7 +9,7 @@ from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
-from stores import sourcecat_dtype
+from storage import sourcecat_dtype
 # TODO this should be in this module
 from region import CircularRegion
 

@@ -30,10 +30,10 @@ GROUP=eisenstein_lab
 # you can change this location if you want, but ideally it would be on fast disks
 MYSCRATCH=/n/scratchlfs02/${GROUP}/${USER}
 cd $MYSCRATCH
-git clone git@github.com:bd-j/xdf.git
-# or git clone https://github.com:bd-j/xdf.git
-cd xdf/cannon/
-# ---for installing environment to scratchlfs ---
+git clone git@github.com:bd-j/jades_force.git
+# or git clone https://github.com:bd-j/jades_force.git
+cd jades_force/cannon
+# ---for installing environment to scratchlfs (not necessary) ---
 #CONDIR=/n/scratchlfs02/eisenstein_lab/${USER}/envs
 #mkdir -p $CONDIR
 #conda env create -f jadespho_environment.yml -p ${CONDIR}/jadesfpho
@@ -65,11 +65,11 @@ source activate jadespho
 python --version
 # python version, you should change this based on output of previous command
 pyv=3.6  
-CONDIR=${HOME}/.conda/envs
+CONDIR=${HOME}/.conda/envs/${CONDA_DEFAULT_ENV}
 cd ${MYSCRATCH}/forcepho
-cp forcepho/*.h ${CONDIR}/jadespho/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
-cp forcepho/*.cu ${CONDIR}/jadespho/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
-cp forcepho/*.cc ${CONDIR}/jadespho/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
+cp forcepho/*.h ${CONDIR}/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
+cp forcepho/*.cu ${CONDIR}/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
+cp forcepho/*.cc ${CONDIR}/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
 ```
 
 This is something that eventually we can fix by including the c and cuda code as package data where the path will always be well defined.
@@ -134,7 +134,7 @@ export THEANO_FLAGS="base_compiledir=$MYSCRATCH/theanocache"
 source activate jadespho
 
 date
-cd ${MYSCRATCH}/xdf/cannon/
+cd ${MYSCRATCH}/jades_force/cannon/
 python run_patch_gpu_test_simple.py
 ```
 
