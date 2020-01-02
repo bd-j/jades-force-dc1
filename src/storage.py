@@ -163,7 +163,7 @@ class PixelStore:
             pdat = exp.create_dataset("data", data=superpixels)
             pdat.attrs["counts_to_flux"] = fluxconv
             pdat.attrs["flux_units"] = unitname
-            if bitmasK:
+            if bitmask:
                 pdat.attrs["bitmask_applied"] = bitmask
             for i, f in enumerate(nameset._fields):
                 pdat.attrs[f] = nameset[i]
