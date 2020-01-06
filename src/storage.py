@@ -221,7 +221,11 @@ class MetaStore:
         for band in self.headers.keys():
             self.wcs[band] = {}
             for expID, hdr in self.headers[band].items():
-                self.wcs[band][expID] = WCS(hdr)
+                w = WCS(hdr)
+                # remove extraneous axes
+                if w.naxis == 3:
+                    w = w.dropaxis(2)
+                self.wcs[band][expID] = w
 
     def add_exposure(self, nameset):
         hdr = fits.getheader(nameset.im)

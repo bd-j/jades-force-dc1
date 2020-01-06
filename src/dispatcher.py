@@ -15,19 +15,32 @@ from region import CircularRegion
 
 
 class SuperScene:
-    """An object that describes *all* sources in a scene.  
+    """An object that describes *all* sources in a scene.
     It contains methods for checking out regions, and checking
-    them back in while updating their parameters and storing meta-information
+    them back in while updating their parameters and storing meta-information.
+
+    It generates SuperScene coordinates for all sources (defined as arcseconds
+    of latitude and longitude from a the median coordinates of the scene)
+    stored in the `scene_coordinates` attribute and builds a KD-Tree based on
+    these coordinates for fast lookup.
+
+    A region can be checked out.  The default is to randomly choose a single
+    valid source from the catalog and find all sources within some radius of
+    that seed source.  The weighting logic for the seeds can be adjusted by
+    over-writing the `seed_weight()` method
     """
 
-    def __init__(self, sourcecatfile, maxactive=20, nscale=3,
-                 maxradius=5., minradius=1, boundary_radius=10.):
+    def __init__(self, sourcecatfile, statefile="superscene.fits",
+                 target_niter=200, maxactive=20, nscale=3,
+                 boundary_radius=8., maxradius=5., minradius=1):
 
-        self.filename = sourcecatfile
+        self.sourcefilename = sourcecatfile
+        self.statefilename = statefile
         self.ingest(sourcecatfile)
         #self.inactive_inds = list(range(self.n_sources))
         #self.active_inds = []
 
+        self.target_niter = target_niter
         self.maxradius = maxradius
         self.minradius = minradius
         self.maxactive = maxactive
@@ -36,6 +49,12 @@ class SuperScene:
 
         # --- build the KDTree ---
         self.kdt = cKDTree(self.scene_coordinates)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        fits.writeto(self.statefilename, self.sourcecat)
 
     def ingest(self, sourcecatfile, bands=None, minrh=0.005):
         cat = fits.getdata(sourcecatfile)
@@ -52,7 +71,6 @@ class SuperScene:
         self.sourcecat["rhalf"][bad] = minrh
         bad = (self.sourcecat["rhalf"] < minrh)
         self.sourcecat["rhalf"][bad] = minrh
-
 
         # Store the initial coordinates, which are used to set positional priors
         self.ra0 = cat["ra"][:]
@@ -85,13 +103,16 @@ class SuperScene:
             self._scene_coordinates = np.array([self.scene_x, self.scene_y]).T
             return self._scene_coordinates
 
-    def checkout_region(self):
+    def checkout_region(self, seed_index=None):
 
-        # TODO: deal with case that region is invalid
-        cra, cdec = self.draw_center()
+        # Draw a patch center, convert to scene coordinates
+        # (arcsec from scene center), and get active and fixed sources
+        cra, cdec = self.draw_center(seed_index=seed_index)
         center = self.sky_to_scene(cra, cdec)
         radius, active_inds, fixed_inds = self.get_circular_scene(center)
-
+        # Deal with case that region is invalid
+        if radius is None:
+            return center, None, None
         region = CircularRegion(cra, cdec, radius / 3600.)
         self.sourcecat["is_active"][active_inds] = True
 
@@ -133,6 +154,7 @@ class SuperScene:
         #candidates = self.sourcecat[kinds]
 
         # check for active sources; if any exist, return None
+        # really should do this check after computing a patch radius
         if np.any(self.sourcecat[kinds]["is_active"]):
             return None, None, None
 
@@ -175,13 +197,28 @@ class SuperScene:
             fixed_inds = finds[:1]
         return radius, kinds[active_inds], kinds[fixed_inds]
 
-    def draw_center(self):
-        k = np.random.choice(self.n_sources, p=self.seed_weight())
+    def draw_center(self, seed_index=None):
+        if seed_index:
+            k = seed_index
+        else:
+            k = np.random.choice(self.n_sources, p=self.seed_weight())
         seed = self.sourcecat[k]
         return seed["ra"], seed["dec"]
 
     def seed_weight(self):
-        return None
+
+        # just one for inactive, zero if active
+        w = (~self.sourcecat["is_active"]).astype(np.float)
+
+        # multiply by something inversely correlated with niter
+        # sigmoid ?  This is ~ 0.5 at niter ~ntarget
+        # `a` controls how fast it goes to 0 after ntarget
+        # `b` shifts the 0.5 weight left and right of ntarget
+        a, b = 10., 0.
+        x = a * (1 - self.sourcecat["n_iter"] / self.target_niter) + b
+        w *= 1 / (1 + np.exp(-x))
+
+        return w / w.sum()
 
     @property
     def n_available(self):
@@ -197,8 +234,7 @@ class SuperScene:
 
         # add fixed boundary objects; these will be all objects
         # within some tolerance (d / size) of every active source
-        pass
-
+        raise NotImplementedError
 
 
 class MPIQueue:
