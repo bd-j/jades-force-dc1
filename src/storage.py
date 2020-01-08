@@ -26,7 +26,7 @@ PAR_COLS = ["id", "ra", "dec", "q", "pa", "nsersic", "rhalf", "flux"]
 
 def sourcecat_dtype(source_type=np.float64, bands=None):
     nband = len(bands)
-    tags = ["id", "source_index", "is_active", "n_iter", "n_patch"]
+    tags = ["id", "source_index", "is_active", "is_valid", "n_iter", "n_patch"]
 
     dt = [(t, np.int32) for t in tags]
     dt += [(c, source_type)

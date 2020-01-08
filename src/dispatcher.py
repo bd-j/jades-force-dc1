@@ -9,7 +9,7 @@ from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
-from storage import sourcecat_dtype
+from storage import sourcecat_dtype, PAR_COLS
 # TODO this should be in this module
 from region import CircularRegion
 
@@ -30,20 +30,28 @@ class SuperScene:
     over-writing the `seed_weight()` method
     """
 
-    def __init__(self, sourcecatfile, statefile="superscene.fits",
-                 target_niter=200, maxactive=20, nscale=3,
-                 boundary_radius=8., maxradius=5., minradius=1):
+    def __init__(self, sourcecatfile, statefile="superscene.fits",  # disk locations
+                 target_niter=200, maxactive_fraction=0.1,          # stopping criteria
+                 maxactive_per_patch=20, nscale=3,                  # patch boundaries
+                 boundary_radius=8., maxradius=5., minradius=1):    # patch boundaries
 
         self.sourcefilename = sourcecatfile
         self.statefilename = statefile
         self.ingest(sourcecatfile)
+        self.parameter_columns = PAR_COLS
         #self.inactive_inds = list(range(self.n_sources))
         #self.active_inds = []
 
+        self.n_sources = len(self.sourcecat)
+        self.n_active = 0
+        self.n_fixed = 0
+
+        self.maxactive_fraction = maxactive_fraction
         self.target_niter = target_niter
+
         self.maxradius = maxradius
         self.minradius = minradius
-        self.maxactive = maxactive
+        self.maxactive = maxactive_per_patch
         self.boundary_radius = boundary_radius
         self.nscale = 3
 
@@ -53,8 +61,17 @@ class SuperScene:
     def __enter__(self):
         return self
 
-    def __exit__(self):
-        fits.writeto(self.statefilename, self.sourcecat)
+    def __exit__(self, type, value, traceback):
+        fits.writeto(self.statefilename, self.sourcecat, overwrite=True)
+
+    @property
+    def sparse(self):
+        frac = self.n_active * 1.0 / self.n_sources
+        return frac < self.maxactive_fraction
+
+    @property
+    def undone(self):
+        return np.any(self.sourcecat["n_iter"] < self.target_niter)
 
     def ingest(self, sourcecatfile, bands=None, minrh=0.005):
         cat = fits.getdata(sourcecatfile)
@@ -115,19 +132,36 @@ class SuperScene:
             return center, None, None
         region = CircularRegion(cra, cdec, radius / 3600.)
         self.sourcecat["is_active"][active_inds] = True
+        self.sourcecat["is_valid"][active_inds] = False
+        self.sourcecat["is_valid"][fixed_inds] = False
+        self.n_active += len(active_inds)
+        self.n_fixed += len(fixed_inds)
 
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]
 
-    def checkin_region(self, active, niter):
+    def checkin_region(self, active, fixed, niter, mass_matrix=None):
+
+        # Find where the sources are that are being checked in
         try:
-            active_inds = active["sourcecat_index"]
+            active_inds = active["source_index"]
+            fixed_inds = fixed["source_index"]
         except(KeyError):
             raise
+
+        # replace active source parameters with new parameters
         for f in self.parameter_columns:
             self.sourcecat[f][active_inds] = active[f]
+
+        # update metadata
         self.sourcecat["n_iter"][active_inds] += niter
         self.sourcecat["is_active"][active_inds] = False
         self.sourcecat["n_patch"][active_inds] += 1
+        self.sourcecat["is_valid"][active_inds] = True
+        self.sourcecat["is_valid"][fixed_inds] = True
+
+        self.n_active -= len(active_inds)
+        self.n_fixed -= len(fixed_inds)
+        # log which patch and which child ran for each source?
 
     def get_circular_scene(self, center):
         """
@@ -213,16 +247,12 @@ class SuperScene:
         # multiply by something inversely correlated with niter
         # sigmoid ?  This is ~ 0.5 at niter ~ntarget
         # `a` controls how fast it goes to 0 after ntarget
-        # `b` shifts the 0.5 weight left and right of ntarget
-        a, b = 10., 0.
+        # `b` shifts the 0.5 weight left (negative) and right of ntarget
+        a, b = 20., -1.0
         x = a * (1 - self.sourcecat["n_iter"] / self.target_niter) + b
         w *= 1 / (1 + np.exp(-x))
 
         return w / w.sum()
-
-    @property
-    def n_available(self):
-        return len(self.valid_inds)
 
     def get_grown_scene(self):
         # option 1
@@ -239,30 +269,38 @@ class SuperScene:
 
 class MPIQueue:
 
-    def __init__(self, comm, nchildren):
+    def __init__(self, comm, n_children):
 
         self.comm = comm
         # this is just a list of child numbers
         self.busy = []
-        self.idle = list(range(nchildren))
-        self.alldone = False
-        self.done = MPI.DONE
+        self.idle = list(range(n_children + 1))[1:]
+        self.n_children = n_children
+        self.parent = 0
 
     def collect_one(self):
         """Collect from a single child process.  Keeps querying until a child is done
         """
-        for i, (c, req) in enumerate(self.busy):
-            stat = self.comm.Iprobe(source=child, tag=MPI.ANY_TAG)
-            if stat == self.done:
-                # blocking recieve
-                result = comm.recv(source=child, tag=MPI.ANY_TAG,
-                                   status=status)
-                ret = self.busy.pop(i)
-                self.idle.append(c)
-                return ret, result
+        status = MPI.Status()
+        while True:
+            # replace explicit loop with source = MPI.ANY_SOURCE?
+            for i, (child, req) in enumerate(self.busy):
+                stat = self.comm.Iprobe(source=child, tag=MPI.ANY_TAG)
+                if stat:
+                    # Blocking recieve
+                    result = self.comm.recv(source=child, tag=MPI.ANY_TAG,
+                                            status=status)
+                    ret = self.busy.pop(i)
+                    self.idle.append(child)
+                    return ret, result
 
     def submit(self, task, tag=MPI.ANY_TAG):
         child = self.idle.pop(0)
-        req = self.comm.send(task, dest=child, tag=tag)
+        # Non-blocking send
+        req = self.comm.isend(task, dest=child, tag=tag)
         self.busy.append((child, req))
+        return child
 
+    def closeout(self):
+        while(len(self.idle) > 0):
+            c = self.submit(None)
