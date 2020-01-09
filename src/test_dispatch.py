@@ -15,9 +15,6 @@ from default_config import config
 from dispatcher import SuperScene, MPIQueue
 
 
-#log = logging.getLogger(__name__)
-#_VERBOSE = 10
-
 # child side
 def do_work(region, active, fixed, mm):
     # pretend to do work
@@ -29,12 +26,16 @@ def do_work(region, active, fixed, mm):
     return result
 
 
+#log = logging.getLogger(__name__)
+#_VERBOSE = 10
+
+
 if __name__ == "__main__":
 
     # load parameters
     config.initial_catalog = "/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/source_catalogs/photometry_table_psf_matched_v1.0.fits"
+    config.patchlogfile = "patchlog.dat"
 
-    
     # MPI communicator
     comm = MPI.COMM_WORLD
     child = comm.Get_rank()
@@ -44,6 +45,7 @@ if __name__ == "__main__":
     config.nchildren = comm.Get_size() - 1
 
     if (not child):
+        tstart = time.time()
         patchcat = {}
         # Make Queue
         queue = MPIQueue(comm, config.nchildren)
@@ -53,9 +55,9 @@ if __name__ == "__main__":
             while True:
                 # Generate patch proposals and send to idle children
                 work_to_do = ((len(queue.idle) > 0)
-                                & sceneDB.sparse
-                                & sceneDB.undone
-                                )
+                               & sceneDB.sparse
+                               & sceneDB.undone
+                              )
                 print(work_to_do)
                 #work_to_do = True
                 while work_to_do:
@@ -71,7 +73,7 @@ if __name__ == "__main__":
                     patchcat[patchid] = {"ra": region.ra,
                                          "dec": region.dec,
                                          "radius": region.radius,
-                                         "sources": active["source_index"]}
+                                         "sources": active["source_index"].tolist()}
                     # submit the task
                     assigned_to = queue.submit(chore, tag=patchid)
                     # TODO: Log the submission
@@ -86,15 +88,20 @@ if __name__ == "__main__":
                 # collect from a single child and set it idle
                 c, result = queue.collect_one()
                 #print(result)
+                # TODO: Log the collection
                 sceneDB.checkin_region(result.active, result.fixed,
                                        result.niter, mass_matrix=None)
 
                 # End criterion
                 end = len(queue.idle) == queue.n_children
                 if end:
-                    
+                    ttotal = time.time() - tstart
+                    print("finished in {}s".format(ttotal))
                     break
 
+        import json
+        with open(config.patchlogfile, "w") as f:
+            json.dump(patchcat, f)
         queue.closeout()
 
     elif child:

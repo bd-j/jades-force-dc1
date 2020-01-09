@@ -12,6 +12,11 @@ config = Namespace()
 # --- Overall ----
 config.log = True
 
+# ---------------
+# --- Output -----
+config.scene_catalog = "superscene.fits"
+config.patchlogfile = "patchlog.dat"
+
 # -----------------------
 # --- Filters being run ---
 config.bandlist = ["F090W", "F115W", "F150W", "F200W",
