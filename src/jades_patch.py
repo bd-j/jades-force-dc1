@@ -307,6 +307,20 @@ class JadesPatch(Patch):
         """Return a list of headers (dict-like objects of wcs, filter, and
         exposure id) and exposureIDs for all exposures that overlap the region.
         These should be sorted by integer band_id.
+
+        Parameters
+        ----------
+        region : region.Region instance
+
+        bandlist : list of str
+            A list of band names to search for images.
+
+        imsize : 2-tuple of ints, optional
+            The full image size of the pixels
+
+        Returns
+        -------
+        hdrs, wcses, epaths, bands
         """
         super_corners = self.pixelstore.superpixel_corners()
         bra, bdec = region.bounding_box
@@ -344,10 +358,10 @@ class JadesPatch(Patch):
 
         Parameters
         -----------
+        epath, wcs, region
 
         Returns
         ------------
-
         data, ierr, x, y
 
         """

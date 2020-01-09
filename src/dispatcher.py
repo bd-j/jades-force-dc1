@@ -74,6 +74,11 @@ class SuperScene:
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
 
     def ingest(self, sourcecatfile, bands=None, minrh=0.005):
+        """Read the given catalog file and generate the internal `sourcecat`
+        attribute, which is an ndarray matched row-by-row but has all required
+        columns.  This method could be subclassed to handle different catalog
+        formats.
+        """
         cat = fits.getdata(sourcecatfile)
         self.header = fits.getheader(sourcecatfile)
         self.bands = self.header["FILTERS"].split(",")
@@ -96,32 +101,63 @@ class SuperScene:
 
     def sky_to_scene(self, ra, dec):
         """Generate scene coordinates, which are anglular offsets (lat, lon)
-        from the median ra, dec in units of arcsec
+        from the median ra, dec in units of arcsec.
         """
         c = SkyCoord(ra, dec, unit="deg")
-        xy = c.transform_to(self._scene_frame)
+        xy = c.transform_to(self.scene_frame)
         return xy.lon.arcsec, xy.lat.arcsec
+
+    @property
+    def scene_frame(self):
+        """Generate and cache (or return cached version) of the scene frame,
+        which is a frame centered on the median RA and Dec of the sources.
+        """
+        try:
+            return self._scene_frame
+        except(AttributeError):
+            mra = np.median(self.sourcecat["ra"])
+            mdec = np.median(self.sourcecat["dec"])
+            center = SkyCoord(mra, mdec, unit="deg")
+            self._scene_frame = center.skyoffset_frame()
+            self._scene_center = (mra, mdec)
+            return self._scene_frame
 
     @property
     def scene_coordinates(self):
         """Return cached scene coordinates for all sources, or, if not present,
         build the scene frame and generate and cache the scene coordinates
-        before returning them
+        before returning them.
+
+        Returns
+        -------
+        scene_coordinates : ndarray of shape (n_source, 2)
+            The scene coordinates.  These are given in arcseconds of latitude
+            and longitude in a coordinate system centered on the median RA and
+            Dec of the sources.
         """
         try:
             return self._scene_coordinates
         except(AttributeError):
-            mra, mdec = np.median(self.sourcecat["ra"]), np.median(self.sourcecat["dec"])
-            center = SkyCoord(mra, mdec, unit="deg")
-            self._scene_frame = center.skyoffset_frame()
-            self._scene_center = (mra, mdec)
-            x, y = self.sky_to_scene(self.sourcecat["ra"], self.sourcecat["dec"])
+            x, y = self.sky_to_scene(self.sourcecat["ra"],
+                                     self.sourcecat["dec"])
             self.scene_x, self.scene_y = x, y
             self._scene_coordinates = np.array([self.scene_x, self.scene_y]).T
             return self._scene_coordinates
 
     def checkout_region(self, seed_index=None):
+        """Get a proposed region and the active and fixed sources that belong
+        to that region.  Active sources are marked as such in the `sourcecat`
+        and both active and fixed sources are marked as invalid for further
+        patches.  The count of active and fixed sources is updated.
 
+        Returns
+        -------
+        region : A region.Region instance
+
+        active : structured ndarray
+            Copies of the rows of the `sourcecat` attribute corresponding to the
+            active sources in the region
+        """
         # Draw a patch center, convert to scene coordinates
         # (arcsec from scene center), and get active and fixed sources
         cra, cdec = self.draw_center(seed_index=seed_index)
@@ -140,7 +176,12 @@ class SuperScene:
         return region, self.sourcecat[active_inds], self.sourcecat[fixed_inds]
 
     def checkin_region(self, active, fixed, niter, mass_matrix=None):
-
+        """Check-in a set of active source parameters, and also fixed sources.
+        The parameters of the active sources are updated in the master catalog,
+        they are marked as inactive, and along with the provided fixed sources
+        are marked as valid.  The counts of active and fixed sources are updated.
+        The number of patches and iterations for each active source is updated.
+        """
         # Find where the sources are that are being checked in
         try:
             active_inds = active["source_index"]
@@ -166,12 +207,12 @@ class SuperScene:
     def get_circular_scene(self, center):
         """
         Parameters
-        -------
+        ----------
         center: 2-element array
             Central coordinates in scene units (i.e. arcsec from scene center)
 
         Returns
-        ------
+        -------
         radius: float
             The radius (in arcsec) from the center that encloses all active sources.
 
@@ -232,7 +273,24 @@ class SuperScene:
         return radius, kinds[active_inds], kinds[fixed_inds]
 
     def draw_center(self, seed_index=None):
-        if seed_index:
+        """Randomly draw a center for the proposed patch.  Currently this
+        works by drawing an object at random, with weights given by the
+        `seed_weight` method.
+
+        Parameters
+        ----------
+        seed_index : int or None (default, None)
+             If given, override the random draw to pull a specific source.
+
+        Returns
+        -------
+        ra : float
+            RA of the center (decimal degrees)
+
+        dec : float
+            Declination of the center (decimal degrees)
+        """
+        if seed_index is not None:
             k = seed_index
         else:
             k = np.random.choice(self.n_sources, p=self.seed_weight())
@@ -268,6 +326,25 @@ class SuperScene:
 
 
 class MPIQueue:
+    """Extremely simple implementation of an MPI queue.  Child processes are
+    kept in `busy` and `idle` lists.  Tasks can be submitted to the queue of
+    idle children.  Additionally, the queue of busy children can be queried
+    to pull out a finished task.
+
+    Parameters
+    ----------
+    comm : An MPI communicator
+
+    n_children : The number of child processes
+
+    Attributes
+    ----------
+    busy : A list of 2-tuples, each giving the child id and the request object
+        for the submitted task
+
+    idle : A list of integers giving the idle children. This is initialized
+        to be all children.
+    """
 
     def __init__(self, comm, n_children):
 
@@ -279,7 +356,16 @@ class MPIQueue:
         self.parent = 0
 
     def collect_one(self):
-        """Collect from a single child process.  Keeps querying until a child is done
+        """Collect from a single child process.  Keeps querying the list of
+        busy children until a child is done.  This causes a busy wait.
+
+        Returns
+        -------
+        ret : a tuple of (int, MPI.request)
+            A 2-tuple of the child number and the MPI request object that was
+            generated during the initial submission to that child.
+
+        result : The result generated and passed by the child.
         """
         status = MPI.Status()
         while True:
@@ -295,6 +381,10 @@ class MPIQueue:
                     return ret, result
 
     def submit(self, task, tag=MPI.ANY_TAG):
+        """Submit a single task to the queue.  This will be assigned to the
+        child process at the top of the (idle) queue. If no children are idle,
+        an index error occurs.
+        """
         child = self.idle.pop(0)
         # Non-blocking send
         req = self.comm.isend(task, dest=child, tag=tag)
@@ -302,5 +392,7 @@ class MPIQueue:
         return child
 
     def closeout(self):
-        while(len(self.idle) > 0):
-            c = self.submit(None)
+        """Send kill messages (`None`) to all the children.
+        """
+        for child in list(range(self.n_children + 1))[1:]:
+            self.comm.send(None, dest=child, tag=0)
