@@ -32,7 +32,7 @@ def sourcecat_dtype(source_type=np.float64, bands=None):
     dt += [(c, source_type)
            for c in ["ra", "dec", "q", "pa", "nsersic", "rhalf"]]
     dt += [(c, source_type, nband)
-           for c in ["flux"]]
+           for c in ["flux", "flux_unc"]]
     return np.dtype(dt)
 
 

@@ -30,7 +30,7 @@ config.metastorefile = "stores/meta_{}.dat".format(config.storename)
 config.psfstorefile = "stores/psf_jades_ng4.h5"
 config.splinedatafile = "stores/sersic_mog_model.smooth=0.0150.h5"
 config.frames_directory = "/n/scratchlfs/eisenstein_lab/stacchella/mosaic/st"
-config.initial_catalog = ""
+config.initial_catalog = "/n/scratchlfs02/eisenstein_lab/bdjohnson/jades_force/data/2019-mini-challenge/source_catalogs/photometry_table_psf_matched_v1.0.fits"
 
 # ------------------------
 # --- Data Types/Sizes ---
@@ -42,6 +42,7 @@ config.nside_full = 2048         # number of pixels along one side of a square i
 # -----------------------
 # --- Patch Generation ---
 config.max_active_fraction = 0.1
+config.maxactive_per_patch = 15
 
 # -----------------------
 # --- HMC parameters ---

@@ -64,10 +64,11 @@ If you've installed forcepho, then you need to do
 source activate jadespho
 python --version
 # python version, you should change this based on output of previous command
-pyv=3.6  
+pyv=3.7
 CONDIR=${HOME}/.conda/envs/${CONDA_DEFAULT_ENV}
 cd ${MYSCRATCH}/forcepho
 cp forcepho/*.h ${CONDIR}/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
+cp forcepho/*.hh ${CONDIR}/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
 cp forcepho/*.cu ${CONDIR}/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
 cp forcepho/*.cc ${CONDIR}/lib/python${pyv}/site-packages/forcepho-0.2-py${pyv}.egg/forcepho/
 ```
@@ -148,7 +149,7 @@ Interactive Job (Odyssey)
 =======
 
 ```bash
-srun --pty -p gpu -t 0-06:00 --mem 8000 --gres=gpu:1 /bin/bash
+srun --pty -p gpu_test -t 0-01:00 --mem 1000 --gres=gpu:1 /bin/bash
 ```
 
 From the odyssey docs: While on GPU node, you can run `nvidia-smi` to get information about the assigned GPU

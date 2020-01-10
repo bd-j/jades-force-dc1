@@ -52,7 +52,7 @@ if __name__ == "__main__":
     config = parser.parse_args()
     sd, sn = config.store_directory, config.store_name
     config.pixelstorefile = "{}/pixels_{}.h5".format(sd, sn)
-    config.metastorefile = "{}/meta_{}.h5".format(sd, sn)
+    config.metastorefile = "{}/meta_{}.dat".format(sd, sn)
     config.nside_full = 2048
     config.super_pixel_size = 8
     config.pix_dtype = np.float32

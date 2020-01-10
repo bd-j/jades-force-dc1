@@ -2,7 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from mpi4py import MPI
+try:
+    from mpi4py import MPI
+except(ImportError):
+    from argparse import Namespace
+    MPI = Namespace()
+    MPI.ANY_TAG = 1
+
 from scipy.spatial import cKDTree
 
 from astropy.io import fits
@@ -298,6 +304,17 @@ class SuperScene:
         return seed["ra"], seed["dec"]
 
     def seed_weight(self):
+        return self.exp_weight()
+
+    def exp_weight(self):
+        # just one for inactive, zero if active
+        w = (~self.sourcecat["is_active"]).astype(np.float)
+        n = self.sourcecat["n_iter"]
+        sigma = 100
+        w *= np.exp((n.mean() - n) / sigma)
+        return w / w.sum()
+
+    def sigmoid_weight(self):
 
         # just one for inactive, zero if active
         w = (~self.sourcecat["is_active"]).astype(np.float)
