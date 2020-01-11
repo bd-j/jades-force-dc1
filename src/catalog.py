@@ -8,7 +8,7 @@ from forcepho.sources import Scene, Galaxy
 # name of GPU relevant parameters in the source catalog
 SHAPE_COLS = ["ra", "dec", "q", "pa", "nsersic", "rhalf"]
 FLUX_COL = "flux"
-PAR_COLS = ["id"] + SHAPE_COLS + FLUX_COL
+PAR_COLS = ["id"] + SHAPE_COLS + [FLUX_COL]
 
 
 def sourcecat_dtype(source_type=np.float64, bands=None):
@@ -64,7 +64,7 @@ def catalog_to_scene(sourcepars, band_ids, filters,
     # get all sources
     sources = []
     for ii, pars in enumerate(sourcepars):
-        x, y, q, pa, n, rh, flux = [pars[f] for f in SHAPE_COLS]
+        x, y, q, pa, n, rh = [pars[f] for f in SHAPE_COLS]
         gid = pars["id"]
         flux = pars[FLUX_COL]
         s = Galaxy(filters=filters, splinedata=splinedata,

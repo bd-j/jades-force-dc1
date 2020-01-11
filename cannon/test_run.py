@@ -5,6 +5,7 @@ import sys, time
 import numpy as np
 #import matplotlib.pyplot as pl
 import logging
+import h5py
 
 # child side
 from jades_patch import JadesPatch
@@ -22,7 +23,7 @@ def dump_to_h5(filename, patch, active, fixed,
     pix = ["xpix", "ypix", "ierr"]
     meta = ["D", "CW", "crpix", "crval", "exposure_start"]
     extra = ["bandlist", "epaths"]
-    with h5py.File(filename) as out:
+    with h5py.File(filename, "w") as out:
 
         for a in pix:
             arr = getattr(patch, a)
