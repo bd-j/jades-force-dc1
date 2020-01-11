@@ -9,7 +9,8 @@ from forcepho.patch import Patch
 from forcepho.stamp import scale_at_sky
 
 from storage import MetaStore, PixelStore, PSFStore
-from storage import PSF_COLS, PAR_COLS
+from storage import PSF_COLS
+from catalog import catalog_to_scene
 
 JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
@@ -405,27 +406,9 @@ class JadesPatch(Patch):
         -------
         scene: Scene object
         """
-        #sourcepars = sourcepars.astype(np.float)
-        # get all sources
-        sources = []
-        for ii, pars in enumerate(sourcepars):
-            gid, x, y, q, pa, n, rh, flux = [pars[f] for f in PAR_COLS]
-            s = Galaxy(filters=filters, splinedata=splinedata,
-                       free_sersic=free_sersic)
-            s.global_id = gid
-            s.sersic = n
-            s.rh = np.clip(rh, 0.05, 0.10)
-            s.flux = flux[band_ids]
-            s.ra = x
-            s.dec = y
-            s.q = np.clip(q, 0.2, 0.9)
-            s.pa = np.deg2rad(pa)
-            sources.append(s)
-
-        # generate scene
-        scene = Scene(sources)
-
-        return(scene)
+        return catalog_to_scene(sourcepars, band_ids, filters,
+                                splinedata=splinedata,
+                                free_sersic=free_sersic)
 
     def zerocoords(self, scene, sky_zero=None):
         """Reset (in-place) the celestial zero point of the image metadata and

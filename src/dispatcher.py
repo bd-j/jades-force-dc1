@@ -15,7 +15,7 @@ from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
-from storage import sourcecat_dtype, PAR_COLS
+from catalog import sourcecat_dtype, PAR_COLS
 # TODO this should be in this module
 from region import CircularRegion
 

@@ -6,6 +6,7 @@ import logging
 
 from forcepho.proposal import Proposer
 from forcepho.model import GPUPosterior
+from catalog import scene_to_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -32,29 +33,6 @@ def write_chain(region, patch, trace):
         result.parameter_names = pnames
     
     pass
-
-def make_catalog(position, patch):
-    """Inverse of JadesPatch.set_scene
-    """
-    nactive = patch.n_sources
-    
-    
-    active = np.zeros(nactive, dtype=sourcecat_dtype)
-    patch.scene.set_all_source_params(position)
-    for i, row in enumerate(nactive):
-        s = patch.scene.sources
-        gid, x, y, q, pa, n, rh = s.ra, s.dec, s.q, s.pa, s.nsersic
-        
-        active[i]["nsersic"]
-        active[i]["flux"][band_ids] = s.flux
-
-            s.sersic = n
-            s.rh = np.clip(rh, 0.05, 0.10)
-            s.flux = flux[band_ids]
-            s.ra = x
-            s.dec = y
-            s.q = np.clip(q, 0.2, 0.9)
-            s.pa = np.deg2rad(pa)
 
 
 def run_patch(patcher, region, fixedcat, activecat, config):

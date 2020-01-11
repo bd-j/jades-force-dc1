@@ -20,21 +20,6 @@ EXP_FMT = "{}/{}"
 # should match order in patch.cu
 PSF_COLS = ["amp", "xcen", "ycen", "Cxx", "Cyy", "Cxy"]
 
-# name of GPU relevant parameters in the source catalog
-PAR_COLS = ["id", "ra", "dec", "q", "pa", "nsersic", "rhalf", "flux"]
-
-
-def sourcecat_dtype(source_type=np.float64, bands=None):
-    nband = len(bands)
-    tags = ["id", "source_index", "is_active", "is_valid", "n_iter", "n_patch"]
-
-    dt = [(t, np.int32) for t in tags]
-    dt += [(c, source_type)
-           for c in ["ra", "dec", "q", "pa", "nsersic", "rhalf"]]
-    dt += [(c, source_type, nband)
-           for c in ["flux", "flux_unc"]]
-    return np.dtype(dt)
-
 
 def header_to_id(hdr, nameset):
     band = hdr["FILTER"]

@@ -117,10 +117,15 @@ if __name__ == "__main__":
 
     extra = {"data": original,
              "fixed_residual": np.array(fixed_residual),
-             "active_residual": np.array(out[-1])}
+             "active_residual": np.array(out[-1]),
+             "active_chi2": out[0],
+             "active_grad": out[1]
+             }
 
+    fn = "patch{}_ra{:6.4f}_dec{:6.4f}.h5".format("test", region.ra, region.dec)
     dump_to_h5(fn, proposer.patch, active, fixed,
                pixeldatadict=extra)
+    logger.info("wrote patch data to {}".format(fn))
 
     logger.info("Timing proposal evaluation")
     proposer.patch.return_residual = False
@@ -132,6 +137,3 @@ if __name__ == "__main__":
     logger.info("Completed {} proposals in {}s".format(ntime, dur))
 
     logger.info("Done")
-
-
-    #TODO: check that answer basically the same 
