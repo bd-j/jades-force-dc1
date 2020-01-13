@@ -310,7 +310,8 @@ class SuperScene:
         # just one for inactive, zero if active
         w = (~self.sourcecat["is_active"]).astype(np.float)
         n = self.sourcecat["n_iter"]
-        sigma = 100
+        mu = min(n.min(), self.target_niter)
+        sigma = 20
         w *= np.exp((n.mean() - n) / sigma)
         return w / w.sum()
 

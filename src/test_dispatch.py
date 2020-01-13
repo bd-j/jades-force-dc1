@@ -7,9 +7,8 @@ import numpy as np
 from mpi4py import MPI
 
 import logging
-
 from argparse import Namespace
-from default_config import config
+
 
 # parent side
 from dispatcher import SuperScene, MPIQueue
@@ -33,6 +32,7 @@ def do_work(region, active, fixed, mm):
 if __name__ == "__main__":
 
     # load parameters
+    from default_config import config
     config.initial_catalog = "/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/source_catalogs/photometry_table_psf_matched_v1.0.fits"
     config.patchlogfile = "patchlog.dat"
 

@@ -41,12 +41,14 @@ config.nside_full = 2048         # number of pixels along one side of a square i
 # -----------------------
 # --- Patch Generation ---
 config.max_active_fraction = 0.1
+config.maxactive_per_patch = 15
 
 # -----------------------
 # --- HMC parameters ---
-config.nwarm = 250
-config.niter = 100
-config.ntune = 100
+config.n_warm = 200
+config.n_iter = 100
+config.n_tune = 1000
+config.n_start = 20
 
 # ------------------------
 # --- PSF information ----
