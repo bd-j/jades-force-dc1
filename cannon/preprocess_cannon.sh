@@ -4,7 +4,7 @@
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH --mem-per-cpu=2000 # Memory per node in MB (see also --mem-per-cpu)
 #SBATCH -p shared,test # Partition to submit to
-#SBATCH -t 12:00:00 # Runtime
+#SBATCH -t 01:00:00 # Runtime
 #SBATCH -J preprocess_jades
 #SBATCH -o /n/scratchlfs02/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.out # Standard out goes to this file
 #SBATCH -e /n/scratchlfs02/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.err # Standard err goes to this file

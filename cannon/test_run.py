@@ -18,27 +18,49 @@ from dispatcher import SuperScene
 logging.basicConfig(level=logging.DEBUG)
 
 
+def make_imset(out, paths, name, arrs):
+    for i, epath in enumerate(paths):
+        try:
+            g = out[epath]
+        except(KeyError):
+            g = out.create_group(epath)
+
+        try:
+            g.create_dataset(name, data=np.array(arrs[i]))
+        except:
+            print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
+
+
 def dump_to_h5(filename, patch, active, fixed,
-               pixeldatadict={}):
+               pixeldatadict={}, otherdatadict={}):
     pix = ["xpix", "ypix", "ierr"]
-    meta = ["D", "CW", "crpix", "crval", "exposure_start"]
-    extra = ["bandlist", "epaths"]
+    meta = ["D", "CW", "crpix", "crval"]
     with h5py.File(filename, "w") as out:
+
+        out.create_dataset("epaths", data=np.array(patch.epaths, dtype="S"))
+        out.create_dataset("bandlist", data=np.array(patch.bandlist, dtype="S"))
+        out.create_dataset("exposure_start", data=patch.exposure_start)
+        
+        for band in patch.bandlist:
+            g = out.create_group(band)
 
         for a in pix:
             arr = getattr(patch, a)
             pdat = np.split(arr, np.cumsum(patch.exposure_N)[:-1])
-            out.create_dataset(a, data=np.array(pdat))
+            make_imset(out, patch.epaths, a, pdat)
 
-        for a in meta + extra:
+        for a in meta:
             arr = getattr(patch, a)
-            out.create_dataset(a, data=np.array(arr))
+            make_imset(out, patch.epaths, a, arr)
 
-        for a, arr in pixeldatadict.keys():
+        for a, pdat in pixeldatadict.items():
+            make_imset(out, patch.epaths, a, pdat)
+
+        for a, arr in otherdatadict.items():
             out.create_dataset(a, data=arr)
 
         out.create_dataset("active", data=active)
-        out.create_dataset("fixed", data=active)
+        out.create_dataset("fixed", data=fixed)
 
 
 if __name__ == "__main__":
@@ -116,16 +138,17 @@ if __name__ == "__main__":
     proposer = Proposer(patcher)
     out = proposer.evaluate_proposal(pactive)
 
-    extra = {"data": original,
+    pixr = {"data": original,
              "fixed_residual": np.array(fixed_residual),
              "active_residual": np.array(out[-1]),
-             "active_chi2": out[0],
+            }
+    extra = {"active_chi2": out[0],
              "active_grad": out[1]
              }
 
     fn = "patch{}_ra{:6.4f}_dec{:6.4f}.h5".format("test", region.ra, region.dec)
     dump_to_h5(fn, proposer.patch, active, fixed,
-               pixeldatadict=extra)
+               pixeldatadict=pixr, otherdatadict=extra)
     logger.info("wrote patch data to {}".format(fn))
 
     logger.info("Timing proposal evaluation")

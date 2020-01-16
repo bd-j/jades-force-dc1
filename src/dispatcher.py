@@ -79,7 +79,7 @@ class SuperScene:
     def undone(self):
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
 
-    def ingest(self, sourcecatfile, bands=None, minrh=0.005):
+    def ingest(self, sourcecatfile, bands=None, minrh=0.03):
         """Read the given catalog file and generate the internal `sourcecat`
         attribute, which is an ndarray matched row-by-row but has all required
         columns.  This method could be subclassed to handle different catalog

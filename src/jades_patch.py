@@ -16,6 +16,7 @@ JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
 
 
+# FIXME: make logic for scene setting and zerocoords more robust.
 class JadesPatch(Patch):
 
     """This class converts between JADES-like exposure level pixel data,
@@ -172,6 +173,7 @@ class JadesPatch(Patch):
         self.CW = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
         self.crpix = np.empty((self.n_exp, 2), dtype=dtype)
         self.crval = np.empty((self.n_exp, 2), dtype=dtype)
+        ra0, dec0 = self.patch_reference_coordinates
 
         for j, wcs in enumerate(wcses):
             # TODO - should do a better job getting a matched crpix/crval pair
@@ -179,8 +181,9 @@ class JadesPatch(Patch):
             # TODO: Source specific crpix, crval pairs?
             self.crval[j] = wcs.wcs.crval - self.patch_reference_coordinates
             self.crpix[j] = wcs.wcs.crpix
-            for i, source in enumerate(scene.sources):
-                CW_mat, D_mat = scale_at_sky([source.ra, source.dec], wcs)
+            for i, s in enumerate(scene.sources):
+                # FIXME: this is a little hacky; what if zerocoords hasn't been called after the scene changed?
+                CW_mat, D_mat = scale_at_sky([s.ra + r0, s.dec + dec0], wcs)
                 self.D[j, i] = D_mat
                 self.CW[j, i] = CW_mat
 
