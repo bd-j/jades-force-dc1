@@ -183,7 +183,7 @@ class JadesPatch(Patch):
             self.crpix[j] = wcs.wcs.crpix
             for i, s in enumerate(scene.sources):
                 # FIXME: this is a little hacky; what if zerocoords hasn't been called after the scene changed?
-                CW_mat, D_mat = scale_at_sky([s.ra + r0, s.dec + dec0], wcs)
+                CW_mat, D_mat = scale_at_sky([s.ra + ra0, s.dec + dec0], wcs)
                 self.D[j, i] = D_mat
                 self.CW[j, i] = CW_mat
 
