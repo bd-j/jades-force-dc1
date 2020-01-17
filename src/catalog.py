@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""catalog.py
+
+Methods for generating Scenes from catalogs and vice versa.
+Also defines the standard source catalog data type.
+"""
+
+
 import numpy as np
 from forcepho.sources import Scene, Galaxy
 

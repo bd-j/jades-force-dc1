@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""dispatcher.py
+
+Parent side classes for MPI queues and handling a master source catalog,
+where sources/patches are checked out and checked back in
+"""
+
+
 import numpy as np
 try:
     from mpi4py import MPI

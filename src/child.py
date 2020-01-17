@@ -8,6 +8,7 @@ from forcepho.proposal import Proposer
 from forcepho.model import GPUPosterior
 from forcepho.fitting import Result
 from catalog import scene_to_catalog
+from mc import run_pymc3
 
 logger = logging.getLogger(__name__)
 
@@ -72,58 +73,6 @@ def run_patch(patcher, region, fixedcat, activecat, config):
     # send back position and mass matrix
     cat = scene_to_catalog(patcher.scene)
     return cat, massout, fixed, niter
-
-
-def run_pymc3(model, p0, config, init_mass=None):
-
-    # -- Launch HMC ---
-    # wrap the loglike and grad in theano tensor ops
-    model.proposer.patch.return_residuals = False
-    logl = LogLikeWithGrad(model)
-
-    # Get upper and lower bounds for variables
-    lower, upper = prior_bounds(miniscene)
-    print(lower.dtype, upper.dtype)
-    pnames = model.scene.parameter_names
-    start = dict(zip(pnames, p0))
-
-    # Define the windows used to tune the mass matrix.
-    k = np.floor(np.log2((config.n_tune - config.n_warm) / config.n_start))
-    nwindow = config.n_start * 2 ** np.arange(k)
-    nwindow = np.append(nwindow, config.n_tune - config.n_warm - np.sum(nwindow))
-    nwindow = nwindow.astype(int)
-
-    # The pm.sample() method below will draw an initial theta,
-    # then call logl.perform and logl.grad multiple times
-    # in a loop with different theta values.
-    with pm.Model() as opmodel:
-
-        # Set priors for each element of theta.
-        z0 = prior_bounds(model.scene)
-        theta = tt.as_tensor_variable(z0)
-
-        # Instantiate target density.
-        pm.DensityDist('likelihood', lambda v: logl(v),
-                        observed={'v': theta})
-
-        # Tune mass matrix.
-        start = None
-        burnin = None
-        for steps in nwindow:
-            step = get_step_for_trace(init_cov=init_cov, trace=burnin)
-            burnin = pm.sample(start=start, tune=steps, draws=2, step=step,
-                               compute_convergence_checks=False,
-                               discard_tuned_samples=False)
-            start = [t[-1] for t in burnin._straces.values()]
-        step = get_step_for_trace(init_cov=init_cov, trace=burnin)
-
-        # Sample with tuned mass matrix.
-        trace = pm.sample(draws=config.n_iter, tune=config.n_warm,
-                          step=step, start=start,
-                          progressbar=False, cores=1,
-                          discard_tuned_samples=True)
-
-        return trace, step
 
 
 def make_result(region, patch, trace, ncall=-1, twall=0, config=None):
