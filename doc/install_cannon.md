@@ -136,7 +136,8 @@ source activate jadespho
 
 date
 cd ${MYSCRATCH}/jades_force/cannon/
-python run_patch_gpu_test_simple.py
+#python run_patch_gpu_test_simple.py
+python test_sample.py
 ```
 
 Multi-core job: same as above, but the final line is

@@ -46,9 +46,9 @@ config.maxactive_per_patch = 15
 
 # -----------------------
 # --- HMC parameters ---
-config.nwarm = 250
-config.niter = 100
-config.ntune = 100
+config.n_warm = 250
+config.n_iter = 100
+config.n_tune = 100
 
 # ------------------------
 # --- PSF information ----

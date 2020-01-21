@@ -5,7 +5,7 @@
 """
 
 import numpy as np
-from forcepho.posterior import LogLikeWithGrad
+from forcepho.model import LogLikeWithGrad
 
 import theano
 import pymc3 as pm
@@ -90,7 +90,7 @@ def run_pymc3(model, p0, iterations, init_cov=None, prior_bounds=None):
     with pm.Model() as opmodel:
 
         # Set priors for each element of theta.
-        z0 = prior_bounds(p0, model.scene)
+        z0 = prior_bounds(model.scene)
         theta = tt.as_tensor_variable(z0)
 
         # Instantiate target density.

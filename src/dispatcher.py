@@ -98,7 +98,7 @@ class SuperScene:
 
         self.n_sources = len(cat)
         self.cat_dtype = sourcecat_dtype(bands=self.bands)
-        self.sourcecat = np.empty(self.n_sources, dtype=self.cat_dtype)
+        self.sourcecat = np.zeros(self.n_sources, dtype=self.cat_dtype)
         for f in cat.dtype.names:
             if f in self.sourcecat.dtype.names:
                 self.sourcecat[f][:] = cat[f][:]

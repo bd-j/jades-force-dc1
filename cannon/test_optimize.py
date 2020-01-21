@@ -6,6 +6,7 @@ import numpy as np
 #import matplotlib.pyplot as pl
 import logging
 import h5py
+from scipy.optimize import minimize
 
 # child side
 from forcepho.proposal import Proposer
@@ -16,11 +17,12 @@ from mc import prior_bounds
 # parent side
 from dispatcher import SuperScene
 
-import theano
-import pymc3 as pm
-import theano.tensor as tt
+#import theano
+#import pymc3 as pm
+#import theano.tensor as tt
+from scipy.
 
-theano.gof.compilelock.set_lock_status(False)
+#theano.gof.compilelock.set_lock_status(False)
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -46,7 +48,7 @@ def dump_to_h5(filename, patch, active, fixed,
         out.create_dataset("epaths", data=np.array(patch.epaths, dtype="S"))
         out.create_dataset("bandlist", data=np.array(patch.bandlist, dtype="S"))
         out.create_dataset("exposure_start", data=patch.exposure_start)
-        
+
         for band in patch.bandlist:
             g = out.create_group(band)
 
@@ -142,22 +144,24 @@ if __name__ == "__main__":
     pnames = model.scene.parameter_names
     start = dict(zip(pnames, p0))
 
-    with pm.Model() as opmodel:
-        # set priors for each element of theta
-        z0 = prior_bounds(model.scene)
-        logger.info("got priors")
-        theta = tt.as_tensor_variable(z0)
-        # instantiate target density and start sampling.
-        pm.DensityDist('likelihood', lambda v: logl(v), observed={'v': theta})
-        trace = pm.sample(draws=config.n_iter,
-                          tune=config.n_warm,
-                          start=start,
-                          cores=1, progressbar=False,
-                          discard_tuned_samples=True)
-    logger.info("Done sampling")
+    if True:
+        # --- Launch an optimization ---
+        opts = {'ftol': 1e-6, 'gtol': 1e-6, 'factr': 10.,
+                'disp':False, 'iprint': 1, 'maxcor': 20}
+        theta0 = p0.copy()
+        t = time.time()
+        scires = minimize(model.nll, theta0, jac=True,  method='BFGS',
+                          options=opts, bounds=None)
+        ts = time.time() - t
+        chain = scires.x
+        cols = ["fun", "nfev", "njev", "nit", "success", "status"]
+        optinfo = np.zeros(1, dtype=np.dtype([(c, np.float) for c in cols]))
+        for c in cols:
+            v = getattr(scires, c)
+            optinfo[c] = v
+        print(scires.message)
 
-    chain = np.array([trace.get_values(n) for n in pnames]).T
-    model.scene.set_all_parameters(chain[-1, :])
+    model.scene.set_all_parameters(chain)
     prop_last = model.scene.get_proposal()
     model.proposer.patch.return_residuals = True
     out = proposer.evaluate_proposal(prop_last)
@@ -170,9 +174,10 @@ if __name__ == "__main__":
              "active_grad": out[1],
              "ncall": model.ncall.copy(),
              "chain": chain
+             "opt": optinfo
              }
 
-    fn = "patch{}_ra{:6.4f}_dec{:6.4f}.h5".format("sample", region.ra, region.dec)
+    fn = "patch{}_ra{:6.4f}_dec{:6.4f}.h5".format("optimize", region.ra, region.dec)
     dump_to_h5(fn, proposer.patch, active, fixed,
                pixeldatadict=pixr, otherdatadict=extra)
     logger.info("wrote patch data to {}".format(fn))
