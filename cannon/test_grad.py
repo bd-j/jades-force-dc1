@@ -75,6 +75,7 @@ if __name__ == "__main__":
 
     from config import config
     config.seed_index = 7314
+    nsource = 2
     logger = logging.getLogger(__name__)
 
     # Build ingredients (parent and child sides)
@@ -91,6 +92,7 @@ if __name__ == "__main__":
     # checkout region (parent operation)
     # seed_index = 444  # good source to build a scene from
     region, active, fixed = sceneDB.checkout_region(seed_index=config.seed_index)
+    active = active[:nsource]
     logger.info("checked out scene with {} active sources".format(len(active)))
     sr, sid, ra, dec = region.radius*3600, active[0]["source_index"], region.ra, region.dec
     logger.info("scene of radius {:3.2f} arcsec centered on source {} at (ra, dec)=({}, {})".format(sr, sid, ra, dec))
@@ -145,43 +147,18 @@ if __name__ == "__main__":
     pnames = model.scene.parameter_names
     start = dict(zip(pnames, p0))
 
-    if True:
-        # --- Launch an optimization ---
-        opts = {'ftol': 1e-6, 'gtol': 1e-6, 'factr': 10.,
-                'disp':False, 'iprint': 1, 'maxcor': 20}
-        theta0 = p0.copy()
-        t = time.time()
-        scires = minimize(model.nll, theta0, jac=True, method='BFGS',
-                          options=opts, bounds=None)
-        ts = time.time() - t
-        chain = scires.x
-        cols = ["fun", "nfev", "njev", "nit", "success", "status"]
-        optinfo = np.zeros(1, dtype=np.dtype([(c, np.float) for c in cols]))
-        for c in cols:
-            v = getattr(scires, c)
-            optinfo[c] = v
-        print(scires.message)
+    theta0 = p0.copy()
+    delta = p0 * 1e-6
+    dlnp_num = []
+    for i, dp in enumerate(delta):
+        theta = theta0.copy()
+        theta[i] -= dp
+        imlo = model.lnprob(theta)
+        theta[i] += 2 *dp
+        imhi = model.lnprob(theta)
+        dlnp_num.append((imhi - imlo) / (2 *dp))
 
-    model.scene.set_all_source_params(chain)
-    prop_last = model.scene.get_proposal()
-    model.proposer.patch.return_residuals = True
-    out = proposer.evaluate_proposal(prop_last)
-
-    pixr = {"data": original,
-            "fixed_residual": np.array(fixed_residual),
-            "active_residual": np.array(out[-1]),
-            }
-    extra = {"active_chi2": out[0],
-             "active_grad": out[1],
-             "ncall": np.array(model.ncall),
-             "chain": chain,
-             "initial": p0,
-             "opt": optinfo
-             }
-
-    fn = "patch{}_ra{:6.4f}_dec{:6.4f}.h5".format("optimize", region.ra, region.dec)
-    dump_to_h5(fn, proposer.patch, active, fixed,
-               pixeldatadict=pixr, otherdatadict=extra)
-    logger.info("wrote patch data to {}".format(fn))
+    dlnp_an = model.lnprob_grad(theta0)
+    dlnp_num = np.array(dlnp_num)
 
     logger.info("Done")

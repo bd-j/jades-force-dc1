@@ -50,7 +50,7 @@ def catalog_to_scene(sourcepars, band_ids, filters,
     ---------
     sourcepars : structured ndarray
         each row is a source.  It should unpack as:
-        id, ra, dec, q, pa, n, rh, flux, flux_unc
+        ra, dec, q, pa, n, rh, flux, flux_unc
 
     band_ids : list of ints or slice
         The elements of the flux array in `sourcepars` corresponding to
@@ -78,12 +78,12 @@ def catalog_to_scene(sourcepars, band_ids, filters,
                     free_sersic=free_sersic)
         s.global_id = gid
         s.sersic = n
-        s.rh = np.clip(rh, 0.05, 0.10)
+        s.rh = np.clip(rh, 0.05, 0.20)
         s.flux = flux[band_ids]
         s.ra = x
         s.dec = y
         s.q = np.clip(q, 0.2, 0.9)
-        s.pa = np.deg2rad(pa)
+        s.pa = pa #np.deg2rad(pa)
         sources.append(s)
 
     # generate scene

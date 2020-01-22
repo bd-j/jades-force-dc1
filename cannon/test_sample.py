@@ -73,6 +73,7 @@ if __name__ == "__main__":
 
 
     from config import config
+    config.seed_index = 7314
     logger = logging.getLogger(__name__)
 
     # Build ingredients (parent and child sides)
@@ -87,7 +88,7 @@ if __name__ == "__main__":
 
     # checkout region (parent operation)
     # seed_index = 444  # good source to build a scene from
-    region, active, fixed = sceneDB.checkout_region()
+    region, active, fixed = sceneDB.checkout_region(seed_index=config.seed_index)
     logger.info("checked out scene with {} active sources".format(len(active)))
     sr, sid, ra, dec = region.radius*3600, active[0]["source_index"], region.ra, region.dec
     logger.info("scene of radius {:3.2f} arcsec centered on source {} at (ra, dec)=({}, {})".format(sr, sid, ra, dec))
@@ -156,7 +157,8 @@ if __name__ == "__main__":
                           discard_tuned_samples=True)
     logger.info("Done sampling")
 
-    chain = np.array([trace.get_values(n) for n in pnames]).T
+    #chain = np.array([trace.get_values(n) for n in pnames]).T
+    chain = trace.get_values("proposal")
     model.scene.set_all_parameters(chain[-1, :])
     prop_last = model.scene.get_proposal()
     model.proposer.patch.return_residuals = True
