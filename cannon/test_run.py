@@ -94,7 +94,6 @@ if __name__ == "__main__":
     parfixed = patcher.scene.get_all_source_params().copy()
     pfixed = patcher.scene.get_proposal()
     logger.info("got fixed proposal vector")
-    print(pfixed)
 
     # Send patch to GPU (with fixed sources)
     patcher.return_residual = True

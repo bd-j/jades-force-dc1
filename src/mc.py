@@ -30,14 +30,15 @@ def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5):
              for s in scene.sources]
     lower = np.concatenate(lower)
     upper = np.concatenate(upper)
-    z0 = [pm.Uniform(p, lower=l, upper=u) 
-          for p, l, u in zip(pnames, lower, upper)]
+    #z0 = [pm.Uniform(p, lower=l, upper=u) 
+    #      for p, l, u in zip(pnames, lower, upper)]
+    z0 = [pm.Uniform("proposal", lower=lower, upper=upper, shape=lower.shape)]
 
     return z0
 
 
 def simple_run(model, p0, n_iter=50, n_warm=100, prior_bounds=None):
-    
+
     # -- Launch HMC ---
     # wrap the loglike and grad in theano tensor ops
     model.proposer.patch.return_residuals = False

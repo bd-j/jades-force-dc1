@@ -106,6 +106,8 @@ class SuperScene:
         self.sourcecat["rhalf"][bad] = minrh
         bad = (self.sourcecat["rhalf"] < minrh)
         self.sourcecat["rhalf"][bad] = minrh
+        # rotate PA by 90 degrees but keep in the interval [-pi/2, pi/2]
+        #self.sourcecat["pa"] = np.mod(self.sourcecat["pa"], np.pi) - np.pi /2    
 
         # Store the initial coordinates, which are used to set positional priors
         self.ra0 = cat["ra"][:]
