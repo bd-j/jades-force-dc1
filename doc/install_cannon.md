@@ -129,11 +129,11 @@ module load Anaconda3/5.0.1-fasrc01
 
 GROUP=eisenstein_lab
 MYSCRATCH=/n/scratchlfs02/${GROUP}/${USER}
+source activate jadespho
+
 #export THEANO_FLAGS="base_compiledir=$MYSCRATCH/theanocache"
 #CONDIR=${MYSCRATCH}/envs
-
 #source activate ${CONDIR}/jadesfpho
-source activate jadespho
 #date
 cd ${MYSCRATCH}/jades_force/cannon/
 #python run_patch_gpu_test_simple.py
