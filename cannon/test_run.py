@@ -88,9 +88,11 @@ if __name__ == "__main__":
     parser.add_argument("--logging", action="store_true")
     parser.add_argument("--ntime", type=int, default=0)
     parser.add_argument("--check_grad", action="store_true")
+    parser.add_argument("--check_grad", action="store_true")
+    parser.add_argument("--no-rotate", dest="rotate", action="store_false")
     args = parser.parse_args()
 
-    # --- combine cli arguments with config file arguments
+    # --- combine cli arguments with config file arguments ---
     cargs = vars(config)
     cargs.update(vars(args))
     config = argparse.Namespace(**cargs)
@@ -102,9 +104,10 @@ if __name__ == "__main__":
     else:
         logger = Logger(__name__)
 
-    # Build ingredients (parent and child sides)
+    # --- Build ingredients (parent and child sides) ---
     sceneDB = SuperScene(config.initial_catalog,
-                         maxactive_per_patch=config.maxactive_per_patch)
+                         maxactive_per_patch=config.maxactive_per_patch,
+                         ingest_kwargs={"rotate": config.rotate})
     logger.info("Made SceneDB")
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,
@@ -112,14 +115,14 @@ if __name__ == "__main__":
                          splinedata=config.splinedatafile)
     logger.info("Made patch")
 
-    # checkout region (parent operation)
+    # --- checkout region (parent operation) ---
     # seed_index = 444  # good source to build a scene from
     region, active, fixed = sceneDB.checkout_region(seed_index=config.seed_index)
     logger.info("checked out scene with {} active sources".format(len(active)))
     sr, sid, ra, dec = region.radius*3600, active[0]["source_index"], region.ra, region.dec
     logger.info("scene of radius {:3.2f} arcsec centered on source {} at (ra, dec)=({}, {})".format(sr, sid, ra, dec))
 
-    # Build patch on CPU side (child operation)
+    # --- Build patch on CPU side (child operation) ---
     # Note this is the *fixed* source metadata
     patcher.build_patch(region, fixed, allbands=config.bandlist)
     logger.info("built patch with {} fixed sources".format(len(fixed)))
@@ -129,51 +132,39 @@ if __name__ == "__main__":
     pfixed = patcher.scene.get_proposal()
     logger.info("got fixed proposal vector")
 
-    # Send patch to GPU (with fixed sources)
+    # --- Send patch to GPU (with fixed sources) ---
     patcher.return_residual = True
     logger.info("Sending to gpu....")
     gpu_patch = patcher.send_to_gpu()
     logger.info("Initial Patch sent")
 
-    # Evaluate (and subtract) fixed sources
+    # --- Evaluate (and subtract) fixed sources ---
     logger.info("Making proposer and sending fixed proposal")
     proposer = Proposer(patcher)
     out = proposer.evaluate_proposal(pfixed)
     fixed_residual = out[-1]
     logger.info("Fixed sources subtracted")
 
-    #print("Pointers before swap:")
-    # check the cuda pointers
-    #for k, v in patcher.cuda_ptrs.items():
-    #    print(k, int(v))
-
-    # Build active patch
+    # --- Build active patch ----
     logger.info("Replacing cpu metadata with active sources")
     patcher.pack_meta(active)
-    #print(patcher.scene)
     paractive = patcher.scene.get_all_source_params().copy()
     pactive = patcher.scene.get_proposal()
     logger.info("got active proposal vector")
 
-    #sys.exit()
-
     logger.info("Swapping fixed/active metadata and residual/data on GPU")
     patcher.swap_on_gpu()
 
-    #print("Pointers after swap:")
-    # check the cuda pointers
-    #for k, v in patcher.cuda_ptrs.items():
-    #    print(k, int(v))
-
-    # send proposal to GPU
+    # --- send proposal to GPU ---
     #patcher.return_residual = False
     logger.info("Making new proposer and sending active proposal")
     proposer = Proposer(patcher)
     out = proposer.evaluate_proposal(pactive)
 
+    # --- Write patch info and residuals ---
     pixr = {"data": original,
-             "fixed_residual": np.array(fixed_residual),
-             "active_residual": np.array(out[-1]),
+            "fixed_residual": np.array(fixed_residual),
+            "active_residual": np.array(out[-1]),
             }
     extra = {"active_chi2": out[0],
              "active_grad": out[1]
@@ -187,7 +178,10 @@ if __name__ == "__main__":
                pixeldatadict=pixr, otherdatadict=extra)
     logger.info("wrote patch data to {}".format(fn))
 
+    # --- Do some checks ---
+
     if config.check_grad:
+        proposer.patch.return_residual = False
         z0 = paractive.copy()
         model = GPUPosterior(proposer, patcher.scene, verbose=True)
         lnp = model.lnprob(z0)
