@@ -56,6 +56,8 @@ if __name__ == "__main__":
         ee = e.decode("utf")
         axes[i, 0].set_ylabel(" ".join(ee.replace(".flx", "").split("_")[-3:]))
 
+    active = disk["active"][:]
     titles = ["data", "data-model", "model"]
     [ax.set_title(t) for ax, t in zip(axes[0, :], titles)]
+    fig.suptitle("Center index = {}".format(active[0]["source_index"]))
     pl.show()

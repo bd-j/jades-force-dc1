@@ -46,11 +46,12 @@ class SuperScene:
     def __init__(self, sourcecatfile, statefile="superscene.fits",  # disk locations
                  target_niter=200, maxactive_fraction=0.1,          # stopping criteria
                  maxactive_per_patch=20, nscale=3,                  # patch boundaries
-                 boundary_radius=8., maxradius=5., minradius=1):    # patch boundaries
+                 boundary_radius=8., maxradius=5., minradius=1,     # patch boundaries
+                 ingest_kwargs={}):
 
         self.sourcefilename = sourcecatfile
         self.statefilename = statefile
-        self.ingest(sourcecatfile)
+        self.ingest(sourcecatfile, **ingest_kwargs)
         self.parameter_columns = PAR_COLS
         #self.inactive_inds = list(range(self.n_sources))
         #self.active_inds = []
@@ -105,7 +106,7 @@ class SuperScene:
         bad = ~np.isfinite(self.sourcecat["rhalf"])
         self.sourcecat["rhalf"][bad] = rhrange[0]
         self.sourcecat["rhalf"][:] = np.clip(self.sourcecat["rhalf"], *rhrange)
-        # rotate PA by 90 degrees but keep in the interval [-pi/2, pi/2]
+        # rotate PA by +90 degrees but keep in the interval [-pi/2, pi/2]
         if rotate:
             p = self.sourcecat["pa"] > 0
             self.sourcecat["pa"] += np.pi/2. - p * np.pi
@@ -296,7 +297,7 @@ class SuperScene:
         Parameters
         ----------
         seed_index : int or None (default, None)
-             If given, override the random draw to pull a specific source.
+             If non-zero int, override the random draw to pull a specific source.
 
         Returns
         -------
@@ -306,7 +307,7 @@ class SuperScene:
         dec : float
             Declination of the center (decimal degrees)
         """
-        if seed_index is not None:
+        if seed_index:
             k = seed_index
         else:
             k = np.random.choice(self.n_sources, p=self.seed_weight())
