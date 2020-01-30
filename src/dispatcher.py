@@ -103,6 +103,8 @@ class SuperScene:
         for f in cat.dtype.names:
             if f in self.sourcecat.dtype.names:
                 self.sourcecat[f][:] = cat[f][:]
+        # --- Rectify shape columns ---
+        self.sourcecat["nsersic"] = 3.0  # middle of range
         bad = ~np.isfinite(self.sourcecat["rhalf"])
         self.sourcecat["rhalf"][bad] = rhrange[0]
         self.sourcecat["rhalf"][:] = np.clip(self.sourcecat["rhalf"], *rhrange)

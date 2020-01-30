@@ -34,7 +34,7 @@ def scene_to_catalog(scene, band_ids, cat_dtype=None):
     active = np.zeros(nactive, dtype=cat_dtype)
     for i, row in enumerate(nactive):
         s = scene.sources[i]
-        pars = s.ra, s.dec, s.q, s.pa, s.nsersic, s.rh
+        pars = s.ra, s.dec, s.q, s.pa, s.sersic, s.rh
         for j, f in enumerate(SHAPE_COLS):
             active[i][f] = pars[j]
         active[i][FLUX_COL][band_ids] = s.flux
