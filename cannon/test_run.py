@@ -88,8 +88,8 @@ if __name__ == "__main__":
     parser.add_argument("--logging", action="store_true")
     parser.add_argument("--ntime", type=int, default=0)
     parser.add_argument("--check_grad", action="store_true")
-    parser.add_argument("--check_grad", action="store_true")
-    parser.add_argument("--no-rotate", dest="rotate", action="store_false")
+    parser.add_argument("--rotate", action="store_true")
+    parser.add_argument("--no-reverse", dest="reverse", action="store_false")
     args = parser.parse_args()
 
     # --- combine cli arguments with config file arguments ---
@@ -104,10 +104,13 @@ if __name__ == "__main__":
     else:
         logger = Logger(__name__)
 
+    logger.info("rotate is {}".format(config.rotate))
+
     # --- Build ingredients (parent and child sides) ---
     sceneDB = SuperScene(config.initial_catalog,
                          maxactive_per_patch=config.maxactive_per_patch,
-                         ingest_kwargs={"rotate": config.rotate})
+                         ingest_kwargs={"rotate": config.rotate,
+                                        "reverse": config.reverse})
     logger.info("Made SceneDB")
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,

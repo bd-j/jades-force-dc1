@@ -87,11 +87,19 @@ class SuperScene:
     def undone(self):
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
 
-    def ingest(self, sourcecatfile, bands=None, rhrange=(0.03, 0.3), rotate=True):
+    def ingest(self, sourcecatfile, bands=None, rhrange=(0.03, 0.3), rotate=False, reverse=True):
         """Read the given catalog file and generate the internal `sourcecat`
         attribute, which is an ndarray matched row-by-row but has all required
         columns.  This method could be subclassed to handle different catalog
         formats.
+
+        Parameters
+        ----------
+        rotate : bool, optional, default=False
+            Whether to rotate the PA by 90 degrees
+
+        reverse : bool, optional, default=True
+            Whether to reverse the direction of the PA (i.e. from Cw to CCW)
         """
         cat = fits.getdata(sourcecatfile)
         self.header = fits.getheader(sourcecatfile)
@@ -112,6 +120,8 @@ class SuperScene:
         if rotate:
             p = self.sourcecat["pa"] > 0
             self.sourcecat["pa"] += np.pi/2. - p * np.pi
+        if reverse:
+            self.sourcecat["pa"] *= -1.0
 
         # Store the initial coordinates, which are used to set positional priors
         self.ra0 = cat["ra"][:]
