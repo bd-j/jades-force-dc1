@@ -105,6 +105,7 @@ if __name__ == "__main__":
         logger = Logger(__name__)
 
     logger.info("rotate is {}".format(config.rotate))
+    logger.info("reverse is {}".format(config.reverse))
 
     # --- Build ingredients (parent and child sides) ---
     sceneDB = SuperScene(config.initial_catalog,
