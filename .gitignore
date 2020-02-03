@@ -1,0 +1,7 @@
+.gitignore
+.DS_Store
+*h5
+*fits
+__pycache__
+patch_maker
+boneyard

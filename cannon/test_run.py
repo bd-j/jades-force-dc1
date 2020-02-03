@@ -44,14 +44,16 @@ if __name__ == "__main__":
     else:
         logger = Logger(__name__)
 
+    ingest_kwargs = {"rotate": config.rotate,
+                     "reverse": config.reverse}
+
     logger.info("rotate is {}".format(config.rotate))
     logger.info("reverse is {}".format(config.reverse))
 
     # --- Build ingredients (parent and child sides) ---
     sceneDB = SuperScene(config.initial_catalog,
                          maxactive_per_patch=config.maxactive_per_patch,
-                         ingest_kwargs={"rotate": config.rotate,
-                                        "reverse": config.reverse})
+                         ingest_kwargs=ingest_kwargs)
     logger.info("Made SceneDB")
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,

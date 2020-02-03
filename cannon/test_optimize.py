@@ -3,8 +3,7 @@
 
 import sys, time
 import numpy as np
-#import matplotlib.pyplot as pl
-import logging
+import argparse
 import h5py
 from scipy.optimize import minimize
 
@@ -17,69 +16,45 @@ from mc import prior_bounds
 # parent side
 from dispatcher import SuperScene
 
-#import theano
-#import pymc3 as pm
-#import theano.tensor as tt
-
-#theano.gof.compilelock.set_lock_status(False)
-logging.basicConfig(level=logging.DEBUG)
-
-
-def make_imset(out, paths, name, arrs):
-    for i, epath in enumerate(paths):
-        try:
-            g = out[epath]
-        except(KeyError):
-            g = out.create_group(epath)
-
-        try:
-            g.create_dataset(name, data=np.array(arrs[i]))
-        except:
-            print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
-
-
-def dump_to_h5(filename, patch, active, fixed,
-               pixeldatadict={}, otherdatadict={}):
-    pix = ["xpix", "ypix", "ierr"]
-    meta = ["D", "CW", "crpix", "crval"]
-    with h5py.File(filename, "w") as out:
-
-        out.create_dataset("epaths", data=np.array(patch.epaths, dtype="S"))
-        out.create_dataset("bandlist", data=np.array(patch.bandlist, dtype="S"))
-        out.create_dataset("exposure_start", data=patch.exposure_start)
-
-        for band in patch.bandlist:
-            g = out.create_group(band)
-
-        for a in pix:
-            arr = getattr(patch, a)
-            pdat = np.split(arr, np.cumsum(patch.exposure_N)[:-1])
-            make_imset(out, patch.epaths, a, pdat)
-
-        for a in meta:
-            arr = getattr(patch, a)
-            make_imset(out, patch.epaths, a, arr)
-
-        for a, pdat in pixeldatadict.items():
-            make_imset(out, patch.epaths, a, pdat)
-
-        for a, arr in otherdatadict.items():
-            out.create_dataset(a, data=arr)
-
-        out.create_dataset("active", data=active)
-        out.create_dataset("fixed", data=fixed)
+# Local
+#from catalog import rectify_catalog, catalog_to_scene, scene_to_catalog
+from utils import Logger, dump_to_h5
+parser = argparse.ArgumentParser()
 
 
 if __name__ == "__main__":
-
-
     from config import config
-    config.seed_index = 7314
-    logger = logging.getLogger(__name__)
+    parser.add_argument("--seed_index", type=int, default=0)
+    parser.add_argument("--outfile", type=str, default="")
+    parser.add_argument("--logging", action="store_true")
+    parser.add_argument("--ntime", type=int, default=0)
+    parser.add_argument("--check_grad", action="store_true")
+    parser.add_argument("--rotate", action="store_true")
+    parser.add_argument("--no-reverse", dest="reverse", action="store_false")
+    args = parser.parse_args()
+
+    # --- combine cli arguments with config file arguments ---
+    cargs = vars(config)
+    cargs.update(vars(args))
+    config = argparse.Namespace(**cargs)
+
+    if config.logging:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+        logger = logging.getLogger(__name__)
+    else:
+        logger = Logger(__name__)
+
+    ingest_kwargs = {"rotate": config.rotate,
+                     "reverse": config.reverse}
+
+    logger.info("rotate is {}".format(config.rotate))
+    logger.info("reverse is {}".format(config.reverse))
 
     # Build ingredients (parent and child sides)
     sceneDB = SuperScene(config.initial_catalog,
-                         maxactive_per_patch=config.maxactive_per_patch)
+                         maxactive_per_patch=config.maxactive_per_patch,
+                         ingest_kwargs=ingest_kwargs)
     sceneDB.sourcecat["nsersic"][:] = 2.0
     logger.info("Made SceneDB")
     patcher = JadesPatch(metastore=config.metastorefile,

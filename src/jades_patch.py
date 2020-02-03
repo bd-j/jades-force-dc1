@@ -17,8 +17,9 @@ JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
 
 
 # FIXME: make logic for scene setting and zerocoords more robust.
-# The scene should probably be an input parameter, since making it
-# from catalog values might change from catalog to catalog.
+# FIXME: The scene should probably be an input parameter, since making it from
+# catalog values might change from catalog to catalog.
+
 class JadesPatch(Patch):
 
     """This class converts between JADES-like exposure level pixel data,

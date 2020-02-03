@@ -3,8 +3,12 @@
 
 import sys, time
 import numpy as np
-import logging
+import argparse
 import h5py
+
+import theano
+import pymc3 as pm
+import theano.tensor as tt
 
 # child side
 from forcepho.proposal import Proposer
@@ -18,13 +22,9 @@ from dispatcher import SuperScene
 # Local
 #from catalog import rectify_catalog, catalog_to_scene, scene_to_catalog
 from utils import Logger, dump_to_h5
-
-
-import theano
-import pymc3 as pm
-import theano.tensor as tt
-
+parser = argparse.ArgumentParser()
 theano.gof.compilelock.set_lock_status(False)
+
 
 if __name__ == "__main__":
 
