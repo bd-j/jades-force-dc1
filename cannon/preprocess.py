@@ -11,8 +11,9 @@ from h5py import File
 from storage import ImageNameSet, PixelStore, MetaStore
 
 
-def find_brants_images(loc="/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/br/"):
-    search = loc + "udf_cube_*.slp.flat.fits"
+def find_brants_images(loc="/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/br/",
+                       pattern="udf_cube_*.slp.flat.fits"):
+    search = os.path.join(os.path.expandvars(loc), pattern)
     import glob
     files = glob.glob(search)
     names = [ImageNameSet(f,                        # im
@@ -25,7 +26,7 @@ def find_brants_images(loc="/Users/bjohnson/Projects/jades_force/data/2019-mini-
 
 def find_sandros_images(loc="/Users/bjohnson/Projects/jades_force/data/2019-mini-challenge/st/",
                         pattern="udf_cube_rev_*.flx.fits"):
-    search = os.path.join(loc, pattern)
+    search = os.path.join(os.path.expandvars(loc), pattern)
     import glob
     files = glob.glob(search)
     names = [ImageNameSet(f,                        # im
@@ -41,15 +42,18 @@ if __name__ == "__main__":
     t = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument("--frames_directory", type=str,
-                        default="/n/scratchlfs/eisenstein_lab/stacchella/mosaic/st")
+                        default="$SCRATCH/eisenstein_lab/stacchella/mosaic/st")
     parser.add_argument("--store_directory", type=str,
-                        default="/n/scratchlfs02/bdjohnson/jades_force/cannon/stores")
+                        default="$SCRATCH/eisenstein_lab/bdjohnson/jades_force/cannon/stores")
     parser.add_argument("--store_name", type=str,
                         default="mini-challenge-19-st")
 
     #from argparse import Namespace
     #config = Namespace()
     config = parser.parse_args()
+    config.frames_directory = os.patch.expandvars(config.frames_directory)
+    config.store_directory = os.patch.expandvars(config.store_directory)
+
     sd, sn = config.store_directory, config.store_name
     config.pixelstorefile = "{}/pixels_{}.h5".format(sd, sn)
     config.metastorefile = "{}/meta_{}.dat".format(sd, sn)
