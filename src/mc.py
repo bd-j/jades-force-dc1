@@ -14,8 +14,36 @@ import theano.tensor as tt
 theano.gof.compilelock.set_lock_status(False)
 
 
-def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5):
+def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5, parname="proposal"):
+    """Generate a pymc3 prior distribution for the scene parameter proposal
 
+    Parameters
+    ----------
+    scene : forcepho.sources.Scene() instance
+        The scene.
+
+    pos_prior : float, optional (default: 0.1/3600)
+        The positional prior half-width, in degrees, as a coordinate distance
+        from the input scene positions.
+
+    flux_factor : float, optional (default: 5)
+        The upper limit for the flux will be this factor times the input scene
+        fluxes.
+
+    parname : string, optional (default: "proposal")
+        The name of the output distribution
+
+    Returns
+    -------
+    z0 : pymc3.Distribution
+        A (vector) distribution describing the prior on the parameters.  This
+        will generally be a multivariate uniform with different upper and
+        lower bounds in each dimension.
+
+    start : dict
+        A dictionary keyed by `parname` that gives the starting value for the
+        parameter.
+    """
     pnames = scene.parameter_names
 
     rh_range = np.array(scene.sources[0].rh_range)
@@ -32,7 +60,9 @@ def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5):
     upper = np.concatenate(upper)
     #z0 = [pm.Uniform(p, lower=l, upper=u) 
     #      for p, l, u in zip(pnames, lower, upper)]
-    z0 = [pm.Uniform("proposal", lower=lower, upper=upper, shape=lower.shape)]
+    z0 = [pm.Uniform(parname, lower=lower, upper=upper, shape=lower.shape)]
+    s0 = scene.get_all_source_params()
+    start = {parname: s0}
 
     return z0
 
@@ -161,7 +191,7 @@ def get_step_for_trace(init_cov=None, trace=None, model=None,
     else:
         # Otherwise, just copy `init_cov`.
         cov = np.array(init_cov)
-    
+
     # Use the sample covariance as the inverse metric.
     potential = QuadPotentialFull(cov)
 

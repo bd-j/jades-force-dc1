@@ -28,13 +28,13 @@ Create conda environment
 # replace this with your group directory
 GROUP=eisenstein_lab
 # you can change this location if you want, but ideally it would be on fast disks
-MYSCRATCH=/n/scratchlfs02/${GROUP}/${USER}
+MYSCRATCH=${SCRATCH}/${GROUP}/${USER}
 cd $MYSCRATCH
 git clone git@github.com:bd-j/jades_force.git
 # or git clone https://github.com:bd-j/jades_force.git
 cd jades_force/cannon
 # ---for installing environment to scratchlfs (not necessary) ---
-#CONDIR=/n/scratchlfs02/eisenstein_lab/${USER}/envs
+#CONDIR=${SCRATCH}/eisenstein_lab/${USER}/envs
 #mkdir -p $CONDIR
 #conda env create -f jadespho_environment.yml -p ${CONDIR}/jadesfpho
 #source activate ${CONDIR}/jadesfpho
@@ -93,7 +93,7 @@ mkdir $MYSCRATCH/theanocache
 
 Before running a job using pymc3, you also have to do (on the node where the job is running) something like
 ```bash
-MYSCRATCH=/n/scratchlfs02/${GROUP}/${USER}
+MYSCRATCH=${SCRATCH}/${GROUP}/${USER}
 export THEANO_FLAGS="base_compiledir=${MYSCRATCH}/theanocache/"
 ```
 
@@ -119,8 +119,8 @@ Single core job example slurm jobscript (change the log file directories)
 #SBATCH -p gpu # Partition to submit to
 #SBATCH -t 06:00:00 # Runtime
 #SBATCH -J force_smoke_test
-#SBATCH -o /n/scratchlfs02/eisenstein_lab/bdjohnson/jades_force/logs/smoketest_%A_%a.out # Standard out goes to this file
-#SBATCH -e /n/scratchlfs02/eisenstein_lab/bdjohnson/jades_force/logs/smoketest%A_%a.err # Standard err goes to this file
+#SBATCH -o  $SCRATCH/eisenstein_lab/bdjohnson/jades_force/logs/smoketest_%A_%a.out # Standard out goes to this file
+#SBATCH -e  $SCRATCH/eisenstein_lab/bdjohnson/jades_force/logs/smoketest%A_%a.err # Standard err goes to this file
 
 module purge
 module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
@@ -128,7 +128,7 @@ module load cuda/10.1.243-fasrc01
 module load Anaconda3/5.0.1-fasrc01
 
 GROUP=eisenstein_lab
-MYSCRATCH=/n/scratchlfs02/${GROUP}/${USER}
+MYSCRATCH=${SCRATCH}/${GROUP}/${USER}
 source activate jadespho
 
 #export THEANO_FLAGS="base_compiledir=$MYSCRATCH/theanocache"

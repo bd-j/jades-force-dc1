@@ -17,6 +17,8 @@ JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
 
 
 # FIXME: make logic for scene setting and zerocoords more robust.
+# The scene should probably be an input parameter, since making it
+# from catalog values might change from catalog to catalog.
 class JadesPatch(Patch):
 
     """This class converts between JADES-like exposure level pixel data,
@@ -319,7 +321,7 @@ class JadesPatch(Patch):
         bandlist : list of str
             A list of band names to search for images.
 
-        imsize : 2-tuple of ints, optional
+        imsize : 2-tuple of ints, optional (default: 2048, 2048)
             The full image size of the pixels
 
         Returns
@@ -353,7 +355,7 @@ class JadesPatch(Patch):
                     epaths.append(epath)
                     bands.append(band)
                     hdrs.append(self.metastore.headers[band][expID])
-        #return hdrs[:1], wcses[:1], epaths[:1], bands[:1]
+
         return hdrs, wcses, epaths, bands
 
     def find_pixels(self, epath, wcs, region):

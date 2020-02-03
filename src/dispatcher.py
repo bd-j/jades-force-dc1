@@ -22,9 +22,9 @@ from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
-from catalog import sourcecat_dtype, PAR_COLS
-# TODO this should be in this module
 from region import CircularRegion
+# TODO: SuperScene should take a rectified catalog, not do the ingestion itself.
+from catalog import rectify_catalog, PAR_COLS
 
 
 class SuperScene:
@@ -87,45 +87,49 @@ class SuperScene:
     def undone(self):
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
 
-    def ingest(self, sourcecatfile, bands=None, rhrange=(0.03, 0.3), rotate=False, reverse=True):
+    def ingest(self, sourcecatfile, **rectify_kwargs):
         """Read the given catalog file and generate the internal `sourcecat`
         attribute, which is an ndarray matched row-by-row but has all required
         columns.  This method could be subclassed to handle different catalog
-        formats.
+        formats.  Also populates the following attributes.
+            * sourcecat
+            * bands
+            * header
+            * n_sources
+            * cat_dtype
+            * ra0
+            * dec0
 
         Parameters
         ----------
+        sourceatfile : string
+            Path to the FITS binary table representing the initilization
+            catalog. This file must have a header entry "FILTERS" giving a
+            comma-separated list of bands in the same order as the "flux"
+            column.
+
+        Extra Parameters
+        ----------------
+        rhrange : 2-tuple of floats, optional (default: 0.03, 0.3)
+            The range of half-light radii that is acceptable in arcsec.
+            Input radii will be clipped to this range.
+
         rotate : bool, optional, default=False
             Whether to rotate the PA by 90 degrees
 
         reverse : bool, optional, default=True
             Whether to reverse the direction of the PA (i.e. from Cw to CCW)
         """
-        cat = fits.getdata(sourcecatfile)
-        self.header = fits.getheader(sourcecatfile)
-        self.bands = self.header["FILTERS"].split(",")
-
-        self.n_sources = len(cat)
-        self.cat_dtype = sourcecat_dtype(bands=self.bands)
-        self.sourcecat = np.zeros(self.n_sources, dtype=self.cat_dtype)
-        for f in cat.dtype.names:
-            if f in self.sourcecat.dtype.names:
-                self.sourcecat[f][:] = cat[f][:]
-        # --- Rectify shape columns ---
-        self.sourcecat["nsersic"] = 3.0  # middle of range
-        bad = ~np.isfinite(self.sourcecat["rhalf"])
-        self.sourcecat["rhalf"][bad] = rhrange[0]
-        self.sourcecat["rhalf"][:] = np.clip(self.sourcecat["rhalf"], *rhrange)
-        # rotate PA by +90 degrees but keep in the interval [-pi/2, pi/2]
-        if rotate:
-            p = self.sourcecat["pa"] > 0
-            self.sourcecat["pa"] += np.pi/2. - p * np.pi
-        if reverse:
-            self.sourcecat["pa"] *= -1.0
+        scat, bands, header = rectify_catalog(sourcecatfile, **rectify_kwargs)
+        self.sourcecat = scat
+        self.bands = bands
+        self.header = header
+        self.n_sources = len(scat)
+        self.cat_dtype = scat.dtype
 
         # Store the initial coordinates, which are used to set positional priors
-        self.ra0 = cat["ra"][:]
-        self.dec0 = cat["dec"][:]
+        self.ra0 = scat["ra"][:]
+        self.dec0 = scat["dec"][:]
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
 
     def sky_to_scene(self, ra, dec):
@@ -139,7 +143,8 @@ class SuperScene:
     @property
     def scene_frame(self):
         """Generate and cache (or return cached version) of the scene frame,
-        which is a frame centered on the median RA and Dec of the sources.
+        which is a lat-lon coordinate frame centered on the median RA and Dec
+        of the sources.
         """
         try:
             return self._scene_frame
