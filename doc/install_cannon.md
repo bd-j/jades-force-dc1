@@ -136,7 +136,6 @@ source activate jadespho
 #source activate ${CONDIR}/jadesfpho
 #date
 cd ${MYSCRATCH}/jades_force/cannon/
-#python run_patch_gpu_test_simple.py
 python test_sample.py
 ```
 

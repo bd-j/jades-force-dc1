@@ -14,7 +14,8 @@ import theano.tensor as tt
 theano.gof.compilelock.set_lock_status(False)
 
 
-def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5, parname="proposal"):
+def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5,
+                 flux_lim=2.0, max_flux=2e3, parname="proposal"):
     """Generate a pymc3 prior distribution for the scene parameter proposal
 
     Parameters
@@ -28,7 +29,7 @@ def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5, parname="proposal"):
 
     flux_factor : float, optional (default: 5)
         The upper limit for the flux will be this factor times the input scene
-        fluxes.
+        fluxes, clipped to be between flux_lim and max_flux
 
     parname : string, optional (default: "proposal")
         The name of the output distribution
@@ -52,7 +53,7 @@ def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5, parname="proposal"):
              [s.ra - pos_prior, s.dec - pos_prior,
               0.3, -np.pi/1.5, sersic_range[0], rh_range[0]]
              for s in scene.sources]
-    upper = [(np.array(s.flux) * flux_factor).tolist() +
+    upper = [(np.clip(np.array(s.flux) * flux_factor, flux_lim, max_flux)).tolist() +
              [s.ra + pos_prior, s.dec + pos_prior,
               1.0, np.pi/1.5, sersic_range[-1], rh_range[-1]]
              for s in scene.sources]
@@ -61,10 +62,16 @@ def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5, parname="proposal"):
     #z0 = [pm.Uniform(p, lower=l, upper=u) 
     #      for p, l, u in zip(pnames, lower, upper)]
     z0 = [pm.Uniform(parname, lower=lower, upper=upper, shape=lower.shape)]
-    s0 = scene.get_all_source_params()
+    s0 = scene.get_all_source_params().copy()
+    # replace parameters at lower bound
+    for i, p in enumerate(pnames):
+        if ("flux" in p):
+            if s0[i] <= lower[i]:
+                s0[i] = 0.5 * (upper[i] + lower[i])
+
     start = {parname: s0}
 
-    return z0
+    return z0, start
 
 
 def simple_run(model, p0, n_iter=50, n_warm=100, prior_bounds=None):
@@ -92,6 +99,7 @@ def simple_run(model, p0, n_iter=50, n_warm=100, prior_bounds=None):
         pm.DensityDist('likelihood', lambda v: logl(v), observed={'v': theta})
         trace = pm.sample(draws=n_iter, tune=n_warm, start=start,
                           cores=1, progressbar=False,
+                          compute_convergence_checks=False,
                           discard_tuned_samples=True)
     return trace, None
 

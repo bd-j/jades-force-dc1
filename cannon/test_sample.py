@@ -33,8 +33,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed_index", type=int, default=0)
     parser.add_argument("--outfile", type=str, default="")
     parser.add_argument("--logging", action="store_true")
-    parser.add_argument("--ntime", type=int, default=0)
-    parser.add_argument("--check_grad", action="store_true")
+    parser.add_argument("--show_progress", action="store_true")
     parser.add_argument("--rotate", action="store_true")
     parser.add_argument("--no-reverse", dest="reverse", action="store_false")
     args = parser.parse_args()
@@ -115,13 +114,13 @@ if __name__ == "__main__":
     proposer = Proposer(patcher)
     model = GPUPosterior(proposer, patcher.scene, verbose=verbose)
     logger.info("Built posterior model")
+    lnp = model.lnprob(p0)
+    logger.info("Initial lnp={}".format(lnp))
+    pnames = model.scene.parameter_names
 
     model.proposer.patch.return_residuals = False
     logl = LogLikeWithGrad(model)
     logger.info("Built loglike object")
-
-    model.scene.set_all_source_params(p0)
-    pnames = model.scene.parameter_names
 
     # --- Run hmc (simple) ---
     logger.info("Begin sampling with {} warm and "
@@ -131,13 +130,14 @@ if __name__ == "__main__":
         # set priors for each element of theta
         z0, start = prior_bounds(model.scene)
         logger.info("got priors")
-        theta = tt.as_tensor_variable(z0)
+        theta = tt.as_tensor_variable(z0[0])
         # instantiate target density and start sampling.
         pm.DensityDist('likelihood', lambda v: logl(v), observed={'v': theta})
         trace = pm.sample(draws=config.n_iter,
                           tune=config.n_warm,
                           start=start,
-                          cores=1, progressbar=False,
+                          compute_convergence_checks=False,
+                          cores=1, progressbar=config.show_progress,
                           discard_tuned_samples=True)
     logger.info("Done sampling")
 

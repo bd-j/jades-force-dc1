@@ -111,7 +111,7 @@ def catalog_to_scene(sourcepars, band_ids, filters,
     return(scene)
 
 
-def rectify_catalog(self, sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=True):
+def rectify_catalog(sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=True):
     """Read the given catalog file and generate a `sourcecat` structured
     ndarray, which is an ndarray matched row-by-row but has all required
     columns.  Also forces parameters to be in valid ranges with valid formats
@@ -143,9 +143,10 @@ def rectify_catalog(self, sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reve
     header : astropy header object
 
     """
+    from astropy.io import fits
     cat = fits.getdata(sourcecatfile)
     header = fits.getheader(sourcecatfile)
-    bands = [b.upper() for b in self.header["FILTERS"].split(",")]
+    bands = [b.upper() for b in header["FILTERS"].split(",")]
 
     n_sources = len(cat)
     cat_dtype = sourcecat_dtype(bands=bands)
