@@ -64,8 +64,9 @@ def prior_bounds(scene, pos_prior=0.1/3600., flux_factor=5,
     z0 = [pm.Uniform(parname, lower=lower, upper=upper, shape=lower.shape)]
     s0 = scene.get_all_source_params().copy()
     # replace parameters at lower bound
+    # HACK
     for i, p in enumerate(pnames):
-        if ("flux" in p):
+        if ("F" in p):
             if s0[i] <= lower[i]:
                 s0[i] = 0.5 * (upper[i] + lower[i])
 

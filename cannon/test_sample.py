@@ -114,8 +114,8 @@ if __name__ == "__main__":
     proposer = Proposer(patcher)
     model = GPUPosterior(proposer, patcher.scene, verbose=verbose)
     logger.info("Built posterior model")
-    lnp = model.lnprob(p0)
-    logger.info("Initial lnp={}".format(lnp))
+    lnp0 = model.lnprob(p0)
+    logger.info("Initial lnp={}".format(lnp0))
     pnames = model.scene.parameter_names
 
     model.proposer.patch.return_residuals = False

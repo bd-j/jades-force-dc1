@@ -136,7 +136,7 @@ source activate jadespho
 #source activate ${CONDIR}/jadesfpho
 #date
 cd ${MYSCRATCH}/jades_force/cannon/
-python test_sample.py
+python test_sample.py --logging
 ```
 
 Multi-core job: same as above, but the final line is
