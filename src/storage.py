@@ -110,6 +110,8 @@ class PixelStore:
         if nameset.bkg:
             bkg = np.array(fits.getdata(nameset.bkg)).T
             im -= bkg
+        else:
+            bkg = np.zeros_like(im)
         mask = ~(np.isfinite(ierr) & np.isfinite(im) & (ierr >= 0))
         if nameset.mask:
             pmask = np.array(fits.getdata(nameset.mask)).T
@@ -118,7 +120,7 @@ class PixelStore:
                 pmask = np.bitwise_and(pmask, bitmask) != 0
             mask = mask | pmask
         ierr[mask] = 0
-        # masked pixels provide a sampling of the background
+        # masked pixels provide a sampling of the subtracted background
         im[mask] = bkg[mask]
         # this does nominal flux calibration of the image.
         # Returns the calibration factor applied

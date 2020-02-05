@@ -8,6 +8,14 @@ import matplotlib.pyplot as pl
 import h5py
 
 
+def split_patch_exp(patch):
+    pixdat = ["xpix", "ypix", "data", "ierr"]
+    splits = [np.split(getattr(patch, arr), np.cumsum(patch.exposure_N)[:-1])
+              for arr in pixdat]
+
+    return splits
+
+
 def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     """Create a rectangular image that bounds the given pixel coordinates
     and assign `value` to the correct pixels. Pixels in the rectangle that do
