@@ -140,10 +140,16 @@ if __name__ == "__main__":
                           cores=1, progressbar=config.show_progress,
                           discard_tuned_samples=True)
     logger.info("Done sampling")
-
-    #chain = np.array([trace.get_values(n) for n in pnames]).T
     chain = trace.get_values("proposal")
-    model.scene.set_all_parameters(chain[-1, :])
+
+    # Failsafes
+    logger.info("Got {} samples.".format(chain.shape[0]))
+    logger.info("Last position is: \n {}".format(chain[-1, :]))
+    from astropy.io import fits
+    fits.writeto("stest_chain_id{}.fits".format(active[0]["source_index"]), chain)
+
+    # now store residuals and other important info
+    model.scene.set_all_source_params(chain[-1, :])
     prop_last = model.scene.get_proposal()
     model.proposer.patch.return_residuals = True
     out = proposer.evaluate_proposal(prop_last)
@@ -154,8 +160,9 @@ if __name__ == "__main__":
             }
     extra = {"active_chi2": out[0],
              "active_grad": out[1],
-             "ncall": model.ncall.copy(),
-             "chain": chain
+             "ncall": model.ncall,
+             "chain": chain,
+             "reference_coordinates": patcher.patch_reference_coordinates
              }
 
     if config.outfile:

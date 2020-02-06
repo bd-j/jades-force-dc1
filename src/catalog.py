@@ -20,7 +20,7 @@ __all__ = ["sourcecat_dtype", "rectify_catalog",
 # name of GPU relevant parameters in the source catalog
 SHAPE_COLS = ["ra", "dec", "q", "pa", "nsersic", "rhalf"]
 FLUX_COL = "flux"
-PAR_COLS = ["id"] + SHAPE_COLS + [FLUX_COL]
+PAR_COLS = ["id"] + [FLUX_COL] + SHAPE_COLS
 
 
 def sourcecat_dtype(source_type=np.float64, bands=None):
@@ -51,7 +51,7 @@ def scene_to_catalog(scene, band_ids, cat_dtype):
         the the `flux` vector attribute of each source in the scene.
     """
     active = np.zeros(nactive, dtype=cat_dtype)
-    for i, row in enumerate(nactive):
+    for i, row in enumerate(active):
         s = scene.sources[i]
         pars = s.ra, s.dec, s.q, s.pa, s.sersic, s.rh
         for j, f in enumerate(SHAPE_COLS):

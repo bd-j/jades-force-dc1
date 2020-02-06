@@ -18,7 +18,9 @@ JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
 
 # FIXME: make logic for scene setting and zerocoords more robust.
 # FIXME: The scene should probably be an input parameter, since making it from
-# catalog values might change from catalog to catalog.
+# catalog values might change from catalog to catalog.  Alternatively, the
+# forcepho.sources module should contain logic for converting between Scene
+# objects and structured arrays of parameters
 
 class JadesPatch(Patch):
 
