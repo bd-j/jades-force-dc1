@@ -111,14 +111,17 @@ if __name__ == "__main__":
                             nside_full=config.nside_full,
                             super_pixel_size=config.super_pixel_size,
                             pix_dtype=config.pix_dtype)
+
     # Make the (empty) metastore
     metastore = MetaStore()
+    print("instantiated pixelstore and metastore")
 
     # --- Find Images ---
     names = find_mosaics(loc=config.frames_directory)
-
+    print("got {} image sets".format(len(names)))
     # Fill pixel and metastores
     for n in names:
+        print(n.im)
         pixelstore.add_exposure(n, bitmask=config.bitmask)
         metastore.add_exposure(n)
 
