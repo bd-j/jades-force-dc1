@@ -312,7 +312,7 @@ class JadesPatch(Patch):
         self.band_start[0] = 0
         self.band_start[1:] = np.cumsum(self.band_N)[:-1]
 
-    def find_exposures(self, region, bandlist, imsize=(2048, 2048)):
+    def find_exposures(self, region, bandlist):
         """Return a list of headers (dict-like objects of wcs, filter, and
         exposure id) and exposureIDs for all exposures that overlap the region.
         These should be sorted by integer band_id.
@@ -324,15 +324,12 @@ class JadesPatch(Patch):
         bandlist : list of str
             A list of band names to search for images.
 
-        imsize : 2-tuple of ints, optional (default: 2048, 2048)
-            The full image size of the pixels.  Assumes all exposures have the
-            same pixel dimensions
-
         Returns
         -------
         hdrs, wcses, epaths, bands
         """
-        super_corners = self.pixelstore.superpixel_corners(imsize=imsize)
+        imsize = self.pixelstore.nside_full
+        super_corners = self.pixelstore.superpixel_corners()
         bra, bdec = region.bounding_box
 
         epaths, bands, hdrs, wcses = [], [], [], []

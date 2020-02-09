@@ -162,7 +162,8 @@ if __name__ == "__main__":
              "active_grad": out[1],
              "ncall": model.ncall,
              "chain": chain,
-             "reference_coordinates": patcher.patch_reference_coordinates
+             "reference_coordinates": patcher.patch_reference_coordinates,
+             "region": np.array([region.ra, ragion.dec, region.radius])
              }
 
     if config.outfile:
