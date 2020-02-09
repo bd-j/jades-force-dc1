@@ -37,16 +37,41 @@ class PixelStore:
     while the second half is the ierr information. Each dataset has attributes
     that describe the nominal flux calibration that was applied and some
     information about the subtracted background, mask, etc.
+
+    Parameters
+    ----------
+    nside_full : int or 2-element array of ints, optional (default: 2048)
+        The number of pixels along each dimension of the image.  Must be an
+        integer multiple of the `super_pixel_size`
+
+    super_pixel_size : int, optional (default: 8)
+        The number of pixels along each side of a super-pixel
+
+    pix_dtype : numpy.dtype, optional (default: np.float32)
+        The data type of the pixels.
     """
 
     def __init__(self, h5file, nside_full=2048, super_pixel_size=8,
                  pix_dtype=np.float32):
 
         self.h5file = h5file
-        self.nside_full = nside_full
-        self.super_pixel_size = super_pixel_size
-        self.pix_dtype = pix_dtype
+        try:
+            # file and attrs exist, use stored value
+            with h5py.File(self.h5file, "r") as h5:
+                self.nside_full = h5.attrs["nside_full"]
+                self.super_pixel_size = h5.attrs["super_pixel_size"]
+        except(KeyError, OSError):
+            # file or attrs do not exist, create them
+            nside_full = np.array(nside_full)
+            print("Adding nside_full={}, super_ixel_sze={} to attrs".format(nside_full, super_pixel_size))
+            #super_pixel_size = np.array(super_pixel_size)
+            with h5py.File(self.h5file, "a") as h5:
+                h5.attrs["nside_full"] = nside_full
+                h5.attrs["super_pixel_size"] = super_pixel_size
+            self.nside_full = nside_full
+            self.super_pixel_size = super_pixel_size
 
+        self.pix_dtype = pix_dtype
         self.nside_super = self.nside_full / self.super_pixel_size
         self.xpix, self.ypix = self.pixel_coordinates()
 
@@ -76,7 +101,7 @@ class PixelStore:
 
     def pixel_coordinates(self, imsize=None):
         if not imsize:
-            imsize = (self.nside_full, self.nside_full)
+            imsize = np.zeros(2) + self.nside_full
         # NOTE: the order swap here for x, y
         yy, xx = np.meshgrid(np.arange(imsize[1]), np.arange(imsize[0]))
         packed = self.superpixelize(xx, yy)
@@ -92,7 +117,6 @@ class PixelStore:
 
         Parameters
         -------------
-
         nameset : NamedTuple with attributes `im`, `err`, `bkg`, `mask`
             A set of names (including path) for a given exposure.  Values of
             `None` or `False` for bkg and mask will result in no background
@@ -135,11 +159,10 @@ class PixelStore:
             # In principle this can be handled, but for now we assume all
             # images are the same size
             raise ValueError("Image is not the expected size")
-        nsuper = imsize / self.super_pixel_size
         superpixels = self.superpixelize(im, ierr)
 
         # Put into the HDF5 file; note this opens and closes the file
-        with h5py.File(self.h5file, "a") as h5:
+        with h5py.File(self.h5file, "r+") as h5:
             path = "{}/{}".format(band, expID)
             try:
                 exp = h5.create_group(path)
@@ -153,7 +176,8 @@ class PixelStore:
             if bitmask:
                 pdat.attrs["bitmask_applied"] = bitmask
             for i, f in enumerate(nameset._fields):
-                pdat.attrs[f] = nameset[i]
+                if type(nameset[i]) is str:
+                    pdat.attrs[f] = nameset[i]
 
     def superpixelize(self, im, ierr, pix_dtype=None):
         """Take native image data and reshape into super-pixel order
@@ -177,17 +201,22 @@ class PixelStore:
         return superpixels
 
     def flux_calibration(self, hdr):
-        image_units = "nJy"
-        zp = hdr["ABMAG"]
-        # math from Sandro
-        conv = 1e9 * 10**(0.4 * (8.9 - zp))
+        if "ABMAG" in hdr:
+            zp = hdr["ABMAG"]
+            image_units = "nJy"
+            # math from Sandro
+            conv = 1e9 * 10**(0.4 * (8.9 - zp))
+        else:
+            print("Warning, no phootmetric calibration applied")
+            image_units = "counts"
+            conv = 1.0
         return conv, image_units
 
     # Need better file handle treatment here.
     # should test for open file handle and return it, otherwise create and cache it
     @property
     def data(self):
-        return h5py.File(self.h5file, "r", swmr=True)
+        return h5py.File(self.h5file, "a", swmr=True)
 
 
 class MetaStore:
@@ -259,7 +288,7 @@ class MetaStore:
 class PSFStore:
     """Assumes existence of a file with the following structure
 
-    band/pixel_grid
+    band/detector_locations
     band/psfs
 
     where psfs is a dataset like

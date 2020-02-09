@@ -143,10 +143,10 @@ if __name__ == "__main__":
     chain = trace.get_values("proposal")
 
     # Failsafes
-    logger.info("Got {} samples.".format(chain.shape[0]))
-    logger.info("Last position is: \n {}".format(chain[-1, :]))
     from astropy.io import fits
     fits.writeto("stest_chain_id{}.fits".format(active[0]["source_index"]), chain)
+    logger.info("Got {} samples.".format(chain.shape[0]))
+    logger.info("Last position is: \n {}".format(chain[-1, :]))
 
     # now store residuals and other important info
     model.scene.set_all_source_params(chain[-1, :])

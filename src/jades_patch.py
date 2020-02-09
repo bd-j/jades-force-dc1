@@ -325,13 +325,14 @@ class JadesPatch(Patch):
             A list of band names to search for images.
 
         imsize : 2-tuple of ints, optional (default: 2048, 2048)
-            The full image size of the pixels
+            The full image size of the pixels.  Assumes all exposures have the
+            same pixel dimensions
 
         Returns
         -------
         hdrs, wcses, epaths, bands
         """
-        super_corners = self.pixelstore.superpixel_corners()
+        super_corners = self.pixelstore.superpixel_corners(imsize=imsize)
         bra, bdec = region.bounding_box
 
         epaths, bands, hdrs, wcses = [], [], [], []

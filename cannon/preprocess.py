@@ -51,8 +51,8 @@ if __name__ == "__main__":
     #from argparse import Namespace
     #config = Namespace()
     config = parser.parse_args()
-    config.frames_directory = os.patch.expandvars(config.frames_directory)
-    config.store_directory = os.patch.expandvars(config.store_directory)
+    config.frames_directory = os.path.expandvars(config.frames_directory)
+    config.store_directory = os.path.expandvars(config.store_directory)
 
     sd, sn = config.store_directory, config.store_name
     config.pixelstorefile = "{}/pixels_{}.h5".format(sd, sn)
