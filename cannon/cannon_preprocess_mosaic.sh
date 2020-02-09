@@ -2,7 +2,7 @@
 
 #SBATCH -n 1 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
-#SBATCH --mem-per-cpu=2000 # Memory per node in MB (see also --mem-per-cpu)
+#SBATCH --mem-per-cpu=16000 # Memory per node in MB (see also --mem-per-cpu)
 #SBATCH -p shared # Partition to submit to
 #SBATCH -t 01:00:00 # Runtime
 #SBATCH -J preprocess_jades

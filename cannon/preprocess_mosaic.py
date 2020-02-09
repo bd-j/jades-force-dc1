@@ -74,13 +74,15 @@ if __name__ == "__main__":
     t = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument("--mosaics_directory", type=str,
-                         default="$SCRATCH/eisenstein_lab/stacchella/mosaic/mosaic")
+                         default="", help=("location of raw mosaics"))
     parser.add_argument("--store_directory", type=str,
-                        default="$SCRATCH/eisenstein_lab/bdjohnson/jades_force/cannon/stores")
+                        default="$SCRATCH/eisenstein_lab/bdjohnson/jades_force/cannon/stores",
+                        help="where to put the h5 pixelstore file")
     parser.add_argument("--store_name", type=str,
                         default="mini-challenge-19-mosaic-st")
     parser.add_argument("--frames_directory", type=str,
-                       default="$SCRATCH/eisenstein_lab/bdjohnson/jades_force/data/2019-mini-challenge/mosaic/st/trimmed")
+                        default="$SCRATCH/eisenstein_lab/bdjohnson/jades_force/data/2019-mini-challenge/mosaic/st/trimmed",
+                        help="location of trimmed, updated mosaics")
     cpars = vars(parser.parse_args())
     _ = [setattr(config, k, v) for k, v in cpars.items()]
 
@@ -88,14 +90,17 @@ if __name__ == "__main__":
     config.frames_directory = os.path.expandvars(config.frames_directory)
     config.store_directory = os.path.expandvars(config.store_directory)
 
-    mfiles = glob.glob(os.path.join(config.mosaics_directory, "*bkgsub.fits"))
-    mfiles += glob.glob(os.path.join(config.mosaics_directory, "*err.fits"))
-    for mf in mfiles:
-        fn = os.path.basename(mf)
-        band = fn.split("/")[-1].split("_")[0]
-        outfile = os.path.join(config.frames_directory, fn)
-        sz = trim_mosaic(mf, outfile, FILTER=band, ABMAG=abmags[band])
-        assert np.all(sz == config.nside_full)
+    if config.mosaics_directory:
+        mfiles = glob.glob(os.path.join(config.mosaics_directory, "*bkgsub.fits"))
+        mfiles += glob.glob(os.path.join(config.mosaics_directory, "*err.fits"))
+        for mf in mfiles:
+            fn = os.path.basename(mf)
+            band = fn.split("/")[-1].split("_")[0]
+            outfile = os.path.join(config.frames_directory, fn)
+            sz = trim_mosaic(mf, outfile, FILTER=band, ABMAG=abmags[band])
+            assert np.all(sz == config.nside_full)
+        print("trimmed mosaics and copied to {}".format(config.mosaics_directory))
+
 
     sd, sn = config.store_directory, config.store_name
     config.pixelstorefile = "{}/pixels_{}.h5".format(sd, sn)
