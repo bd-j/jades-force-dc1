@@ -6,8 +6,8 @@
 #SBATCH -p shared,test # Partition to submit to
 #SBATCH -t 01:00:00 # Runtime
 #SBATCH -J preprocess_jades
-#SBATCH -o $SCRATCH/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.out # Standard out goes to this file
-#SBATCH -e $SCRATCH/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.err # Standard err goes to this file
+#SBATCH -o /n/holyscratch01/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.out # Standard out goes to this file
+#SBATCH -e /n/holyscratch01/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.err # Standard err goes to this file
 
 module purge
 module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01

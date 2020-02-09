@@ -3,11 +3,11 @@
 #SBATCH -n 1 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH --mem-per-cpu=2000 # Memory per node in MB (see also --mem-per-cpu)
-#SBATCH -p shared,test # Partition to submit to
+#SBATCH -p shared # Partition to submit to
 #SBATCH -t 01:00:00 # Runtime
 #SBATCH -J preprocess_jades
-#SBATCH -o $SCRATCH/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.out # Standard out goes to this file
-#SBATCH -e $SCRATCH/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.err # Standard err goes to this file
+#SBATCH -o /n/holyscratch01/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.out # Standard out goes to this file
+#SBATCH -e /n/holyscratch01/eisenstein_lab/bdjohnson/jades_force/cannon/logs/preprocess_%A_%a.err # Standard err goes to this file
 
 module purge
 module load intel/19.0.5-fasrc01 openmpi/4.0.1-fasrc01 hdf5/1.10.5-fasrc01
