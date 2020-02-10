@@ -328,7 +328,7 @@ class JadesPatch(Patch):
         -------
         hdrs, wcses, epaths, bands
         """
-        imsize = self.pixelstore.nside_full
+        imsize = np.zeros(2) + self.pixelstore.nside_full
         super_corners = self.pixelstore.superpixel_corners()
         bra, bdec = region.bounding_box
 
