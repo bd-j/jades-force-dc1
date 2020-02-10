@@ -155,8 +155,8 @@ if __name__ == "__main__":
     out = proposer.evaluate_proposal(prop_last)
 
     pixr = {"data": original,
-            "fixed_residual": np.array(fixed_residual),
-            "active_residual": np.array(out[-1]),
+            "fixed_residual": fixed_residual,
+            "active_residual": out[-1],
             }
     extra = {"active_chi2": out[0],
              "active_grad": out[1],

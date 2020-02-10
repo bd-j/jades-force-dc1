@@ -52,8 +52,8 @@ def get_residuals(patcher, sceneDB, result_file):
     active_residual = model.residual(chain[-1, :])
 
     residuals = {"data": original_data,
-                 "fixed_residual": np.array(fixed_residual),
-                 "active_residual": np.array(active_residual),
+                 "fixed_residual": fixed_residual,
+                 "active_residual": active_residual,
                 }
     extra = {"active_lnp": model._lnp,
              "active_grad": model._lnp_grad
