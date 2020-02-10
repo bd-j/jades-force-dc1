@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, time, glob
+import sys, time, os, glob
 import numpy as np
 import argparse
 import h5py
