@@ -163,7 +163,7 @@ if __name__ == "__main__":
              "ncall": model.ncall,
              "chain": chain,
              "reference_coordinates": patcher.patch_reference_coordinates,
-             "region": np.array([region.ra, ragion.dec, region.radius])
+             "region": np.array([region.ra, region.dec, region.radius])
              }
 
     if config.outfile:

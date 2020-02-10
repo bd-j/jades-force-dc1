@@ -39,33 +39,78 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     return ax
 
 
-if __name__ == "__main__":
+def sky_to_pix(ra, dec, group, ref_coords=0.):
+    crval = group["crval"][:]
+    crpix = group["crpix"][:]
+    CW = group["CW"][:]
 
-    fn = glob.glob(sys.argv[1])[0]
+    if len(CW) != len(ra):
+        CW = CW[0]
+
+    sky = np.array([ra, dec]).T - (crval + ref_coords)
+    pix = np.matmul(CW, sky[:, :, None])[..., 0] + crpix
+
+    return pix
+
+
+def mark_sources(ra, dec, group, ref_coords=0, ax=None,
+                 plot_kwargs={"marker": "x", "linestyle": "", "color": "red"},
+                 **extras):
+
+    pix = sky_to_pix(ra, dec, group, ref_coords=ref_coords)
+
+    plot_kwargs.update(extras)
+    ax.plot(pix[:, 0], pix[:, 1], **plot_kwargs)
+    return ax
+
+
+def show_patch(fn, exposure_inds=[0, -1], show_fixed=True, show_active=False,
+               imshow_kwargs={"vmin": -0.1, "vmax": 0.5}, **extras):
 
     disk = h5py.File(fn, "r")
     epaths = disk["epaths"][:]
-    vtypes = ["data", "active_residual"]
-    showpaths = epaths[0], epaths[-1]
+    active = disk["active"][:]
+    fixed = disk["fixed"][:]
+    try:
+        ref = disk["reference_coordinates"][:]
+    except(KeyError):
+        ref = np.array([np.median(active["ra"]), np.median(active["dec"])])
 
-    ne = 2
-    vrange = (-0.5, 0.5)
+    vtypes = ["data", "active_residual"]
+    ne = len(exposure_inds)
 
     fig, axes = pl.subplots(ne, 3, sharex="row", sharey="row")
-    for i, e in enumerate(showpaths):
-        g = disk[e]
+    for i, e in enumerate(exposure_inds):
+        epath = epaths[e]
+        g = disk[epath]
         model = g["data"][:] - g["active_residual"][:]
         for j, vtype in enumerate(vtypes):
             ax = axes[i, j]
-            show_exp(g["xpix"][:], g["ypix"][:], g[vtype][:], ax=ax, vmin=-0.5, vmax=0.5)
+            show_exp(g["xpix"][:], g["ypix"][:], g[vtype][:], ax=ax, **imshow_kwargs)
             #ax.set_title(e)
         ax = axes[i, -1]
-        show_exp(g["xpix"][:], g["ypix"][:], model, ax=ax, vmin=-0.1, vmax=0.5)
-        ee = e.decode("utf")
+        show_exp(g["xpix"][:], g["ypix"][:], model, ax=ax, **imshow_kwargs)
+        ee = epath.decode("utf")
         axes[i, 0].set_ylabel(" ".join(ee.replace(".flx", "").split("_")[-3:]))
 
-    active = disk["active"][:]
+        if show_active:
+            ax = mark_sources(active["ra"], active["dec"], g,
+                              ref_coords=ref, ax=ax, color="red")
+        if show_fixed:
+            for j in range(3):
+                ax = axes[i, j]
+                ax = mark_sources(fixed["ra"], fixed["dec"], g,
+                                  ref_coords=ref, ax=ax, color="magenta")
+
     titles = ["data", "data-model", "model"]
     [ax.set_title(t) for ax, t in zip(axes[0, :], titles)]
-    fig.suptitle("Center index = {}".format(active[0]["source_index"]))
+    ti = "Center index = {}\n ra, dec=({:10.7f}, {:10.7f})"
+    fig.suptitle(ti.format(active[0]["source_index"], active[0]["ra"], active[0]["dec"]))
     pl.show()
+    return fig, axes, disk
+
+
+if __name__ == "__main__":
+
+    fn = glob.glob(sys.argv[1])[0]
+    fig, axes, data = show_patch(fn)

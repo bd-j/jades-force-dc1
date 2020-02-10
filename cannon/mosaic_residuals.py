@@ -31,7 +31,10 @@ def get_residuals(patcher, sceneDB, result_file):
 
     # --- checkout region (parent operation) ---
     region, cactive, cfixed = sceneDB.checkout_region(seed_index=config.seed_index)
-    assert np.all(active["source_index"] == cactive["source_index"])
+    if np.all(active["source_index"] == cactive["source_index"]):
+        pass
+    else:
+        return None, None
 
     # --- Build patch on CPU side (child operation) ---
     patcher.build_patch(region, fixed, allbands=config.bandlist)
@@ -49,7 +52,8 @@ def get_residuals(patcher, sceneDB, result_file):
     patcher.pack_meta(active)
     patcher.swap_on_gpu()
     model = GPUPosterior(proposer, patcher.scene, verbose=False)
-    active_residual = model.residuals(chain[-1, :])
+    model.evaluate(chain[-1, :])
+    active_residual = model._residuals
 
     residuals = {"data": original_data,
                  "fixed_residual": fixed_residual,
@@ -62,7 +66,7 @@ def get_residuals(patcher, sceneDB, result_file):
              "fixed": fixed
              }
 
-    patcher.free()
+    # patcher.free()  # this causes invalid device reference errors; is it necessary?
     return residuals, extra
 
 
@@ -94,7 +98,11 @@ if __name__ == "__main__":
     result_list = glob.glob(os.path.expandvars(config.result_pattern))
 
     for result_file in result_list:
+        print("working on ".format(result_file))
         residuals, extra = get_residuals(patcher, sceneDB, result_file)
+        if residuals is None:
+            print("could not generate scene for {}".format(result_file))
+            continue
         fn = result_file.replace(".h5", "_mosaic_residuals.h5")
         dump_to_h5(fn, patcher, pixeldatadict=residuals,
                    otherdatadict=extra)
