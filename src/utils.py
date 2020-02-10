@@ -39,7 +39,7 @@ def _make_imset(out, paths, name, arrs):
             print("Could not make {}/{} dataset from {}".format(epath, name, arrs[i]))
 
 
-def dump_to_h5(filename, patch, active, fixed,
+def dump_to_h5(filename, patch, active=None, fixed=None,
                pixeldatadict={}, otherdatadict={}):
     """Dump patch data and scene data to an HDF5 file
     """
@@ -69,5 +69,7 @@ def dump_to_h5(filename, patch, active, fixed,
         for a, arr in otherdatadict.items():
             out.create_dataset(a, data=arr)
 
-        out.create_dataset("active", data=active)
-        out.create_dataset("fixed", data=fixed)
+        if active:
+            out.create_dataset("active", data=active)
+        if fixed:
+            out.create_dataset("fixed", data=fixed)

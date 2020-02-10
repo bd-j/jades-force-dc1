@@ -1,7 +1,9 @@
 .gitignore
 .DS_Store
+.vscode
 *h5
 *fits
 __pycache__
 patch_maker
 boneyard
+data
