@@ -20,7 +20,6 @@ from utils import Logger, dump_to_h5
 parser = argparse.ArgumentParser()
 
 
-
 def get_residuals(patcher, sceneDB, result_file):
 
     # --- get results from file ---
@@ -32,6 +31,7 @@ def get_residuals(patcher, sceneDB, result_file):
 
     # --- checkout region (parent operation) ---
     region, cactive, cfixed = sceneDB.checkout_region(seed_index=config.seed_index)
+    assert np.all(active["source_index"] == cactive["source_index"])
 
     # --- Build patch on CPU side (child operation) ---
     patcher.build_patch(region, fixed, allbands=config.bandlist)
@@ -48,8 +48,8 @@ def get_residuals(patcher, sceneDB, result_file):
     # --- Send active sources, evaluate last element of chain ----
     patcher.pack_meta(active)
     patcher.swap_on_gpu()
-    model = GPUPosterior(proposer, patcher.scene, verbose=verbose)
-    active_residual = model.residual(chain[-1, :])
+    model = GPUPosterior(proposer, patcher.scene, verbose=False)
+    active_residual = model.residuals(chain[-1, :])
 
     residuals = {"data": original_data,
                  "fixed_residual": fixed_residual,
@@ -96,5 +96,5 @@ if __name__ == "__main__":
     for result_file in result_list:
         residuals, extra = get_residuals(patcher, sceneDB, result_file)
         fn = result_file.replace(".h5", "_mosaic_residuals.h5")
-        dump_to_h5(fn, patcher, active, fixed,
-                   pixeldatadict=residuals, otherdatadict=extra)
+        dump_to_h5(fn, patcher, pixeldatadict=residuals,
+                   otherdatadict=extra)
