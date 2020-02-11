@@ -188,9 +188,12 @@ class JadesPatch(Patch):
             self.crpix[j] = wcs.wcs.crpix - 1
             for i, s in enumerate(scene.sources):
                 # FIXME: this is a little hacky; what if zerocoords hasn't been called after the scene changed?
-                CW_mat, D_mat = scale_at_sky([s.ra + ra0, s.dec + dec0], wcs)
+                ssky = np.array([s.ra + ra0, s.dec + dec0])
+                CW_mat, D_mat = scale_at_sky(ssky, wcs)
                 self.D[j, i] = D_mat
                 self.CW[j, i] = CW_mat
+                # self.crval[j, i] = ssky - self.patch_reference_coordinates
+                # self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], origin=0)
 
     def pack_fluxcal(self, hdrs, tweakphot=None, dtype=None):
         """A nominal lux calibrartion has been applied to all images,
