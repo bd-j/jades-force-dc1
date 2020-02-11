@@ -178,16 +178,17 @@ class JadesPatch(Patch):
         self.CW = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
         self.crpix = np.empty((self.n_exp, 2), dtype=dtype)
         self.crval = np.empty((self.n_exp, 2), dtype=dtype)
+        # FIXME: this is a little hacky; what if zerocoords hasn't been called after the scene changed?
         ra0, dec0 = self.patch_reference_coordinates
 
         for j, wcs in enumerate(wcses):
             # TODO - should do a better job getting a matched crpix/crval pair
             # near the center of a patch
             # TODO: Source specific crpix, crval pairs?
-            self.crval[j] = wcs.wcs.crval - self.patch_reference_coordinates
-            self.crpix[j] = wcs.wcs.crpix - 1
+            # Using reference coordinates of patch for crval and zero-indexed crpix
+            self.crval[j] = np.zeros(2, dtype=self.meta_dtype)
+            self.crpix[j] = wcs.all_world2pix(ra0, dec0, 0)
             for i, s in enumerate(scene.sources):
-                # FIXME: this is a little hacky; what if zerocoords hasn't been called after the scene changed?
                 ssky = np.array([s.ra + ra0, s.dec + dec0])
                 CW_mat, D_mat = scale_at_sky(ssky, wcs)
                 self.D[j, i] = D_mat
