@@ -23,9 +23,9 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     standard astro format (x increasing left to right, y increasing bottom to
     top)
     """
-    lo = np.array((xpix.min(), ypix.min()))
-    hi = np.array((xpix.max(), ypix.max()))
-    size = hi - lo + 1
+    lo = np.array((xpix.min(), ypix.min())) - 0.5
+    hi = np.array((xpix.max(), ypix.max())) + 0.5
+    size = hi - lo
     im = np.zeros(size.astype(int)) + np.nan
 
     x = (xpix-lo[0]).astype(int)
@@ -39,10 +39,17 @@ def show_exp(xpix, ypix, value, ax=None, **imshow_kwargs):
     return ax
 
 
-def sky_to_pix(ra, dec, group, ref_coords=0.):
-    crval = group["crval"][:]
-    crpix = group["crpix"][:]
-    CW = group["CW"][:]
+def sky_to_pix(ra, dec, group=None, patch=None, exp_idx=0, ref_coords=0.):
+
+    if group:
+        crval = group["crval"][:]
+        crpix = group["crpix"][:]
+        CW = group["CW"][:]
+    elif patch:
+        crval = patch.crval[exp_idx]
+        crpix = patch.crpix[exp_idx]
+        CW = patch.CW[exp_idx]
+        ref_coords = patch.patch_reference_coordinates
 
     if len(CW) != len(ra):
         CW = CW[0]

@@ -33,7 +33,7 @@ def sourcecat_dtype(source_type=np.float64, bands=None):
     dt = [(t, np.int32) for t in tags]
     dt += [(c, source_type)
            for c in SHAPE_COLS]
-    dt += [(c, source_type, nband)
+    dt += [(c, source_type, (nband,))
            for c in [FLUX_COL]]
     return np.dtype(dt)
 
@@ -92,7 +92,7 @@ def catalog_to_scene(sourcepars, band_ids, filters,
     for ii, pars in enumerate(sourcepars):
         x, y, q, pa, n, rh = [pars[f] for f in SHAPE_COLS]
         gid = pars["id"]
-        flux = pars[FLUX_COL]
+        flux = np.atleast_1d(pars[FLUX_COL])
         s = Galaxy(filters=filters, splinedata=splinedata,
                    free_sersic=free_sersic)
         s.global_id = gid

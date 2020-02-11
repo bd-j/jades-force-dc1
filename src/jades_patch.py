@@ -185,7 +185,7 @@ class JadesPatch(Patch):
             # near the center of a patch
             # TODO: Source specific crpix, crval pairs?
             self.crval[j] = wcs.wcs.crval - self.patch_reference_coordinates
-            self.crpix[j] = wcs.wcs.crpix
+            self.crpix[j] = wcs.wcs.crpix - 1
             for i, s in enumerate(scene.sources):
                 # FIXME: this is a little hacky; what if zerocoords hasn't been called after the scene changed?
                 CW_mat, D_mat = scale_at_sky([s.ra + ra0, s.dec + dec0], wcs)

@@ -8,14 +8,17 @@ This is the data that is required to be input
 
 Requirements for images are:
 
-* They must all be the same dimension.
-* They must have dimensions that are an integer multiple of 8. Ideally they will be square but this is not a strict requirement.
-* The headers must contain a valid WCS (i.e. `"CRPIX"`, `"CRVAL"`, and `"CD"` or `"PC"` matrix keywords.)
+* They must all be the same dimension (for now), preferably 2048 by 2048.  Ideally they will be square but this is not a strict requirement.
+* They must have dimensions that are an integer multiple of 8.
+* The headers must contain a valid WCS (i.e. `"CRPIX"`, `"CRVAL"`, and `"CD"` or `"PC"` + `"CDELT"` matrix keywords.)
    (e.g. `astropy.wcs.WCS(astropy.io.fits.getheader(imname))` must not raise an error.)
 * The headers of all frames must contain a `"FILTER"` keyword with string value, and preferably an `"ABMAG"` zeropoint keyword.
 * There _must_ be a -pixel-matched uncertainty image associated with every science image, in same units as the science image.  Ideally the uncertainty image will have a filename that is easily generated from the science image filename (i.e. by a simple substitution)
 
 Optionally each image may also have an associated background image and pixel mask image.
+
+* The background image should be the same units as the science image, and will be subtracted from it during preprocessing.
+* The mask image can be an array of bitflags or a simple array of 0 (False, do not use this pixel) and 1 (True, use this pixel)
 
 
 Units
@@ -26,10 +29,10 @@ Units
 
 ### Ancillary info
 
-* The PSF must be known and provided
+* The PSF must be known and provided.  It should be representable as a mixture of gaussians (there is code to compute this mixture from an image)
 * There must be a catalog of initial (celestial or on-sky) positions
 * Ideally this catalog would contain rough estimates of the flux scale for the objects.
-* You must obtain the splined Gaussian mixture amplitudes for Sersic profile approximations.  A default set of splines is provided, but is for a particular pixel scale.
+* You must obtain the splined Gaussian mixture amplitudes for Sersic profile approximations.  A default set of splines is provided, but is appropriate for a particular range of half-light radii.
 
 
 ## Preprocessing
