@@ -8,13 +8,16 @@ from astropy.io import fits
 
 from forcepho.proposal import Proposer
 from forcepho.model import GPUPosterior, LogLikeWithGrad
-from mc import prior_bounds
 
+from mc import prior_bounds
 from jades_patch import JadesPatch
 from region import RectangularRegion
 from utils import Logger, dump_to_h5
 
+import theano
 import pymc3 as pm
+import theano.tensor as tt
+theano.gof.compilelock.set_lock_status(False)
 
 
 def checkout_region(catalog, i, j, buffer=20*0.03/3600.):

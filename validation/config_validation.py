@@ -20,11 +20,16 @@ config.bandlist = ["F42fake"]
 # -----------------------
 # --- Data locations ---
 config.store_name = "galsim_v0"
-config.store_directory = os.path.expandvars("$HOME/Projects/jades_force/validation/stores/")
 config.splinedatafile = "stores/sersic_mog_model.smooth=0.0150.h5"
-config.frames_directory = os.path.expandvars("$HOME/Projects/jades_force/data/galsim/")
-config.raw_catalog = os.path.expandvars("$HOME/Projects/jades_force/data/galsim/galsim_xy.dat")
-config.initial_catalog = os.path.expandvars("$HOME/Projects/jades_force/data/galsim/galsim_rectified.fits")
+#config.store_directory = os.path.expandvars("$HOME/Projects/jades_force/validation/stores/")
+#config.frames_directory = os.path.expandvars("$HOME/Projects/jades_force/data/galsim/")
+#config.raw_catalog = os.path.expandvars("$HOME/Projects/jades_force/data/galsim/galsim_xy.dat")
+#config.initial_catalog = os.path.expandvars("$HOME/Projects/jades_force/data/galsim/galsim_rectified.fits")
+
+config.store_directory = os.path.expandvars("$SCRATCH/eisenstein_lab/bdjohnson/jades_force/validation/stores/")
+config.frames_directory = os.path.expandvars("$SCRATCH/eisenstein_lab/bdjohnson/jades_force/data/galsim/")
+config.raw_catalog = os.path.expandvars("$SCRATCH/eisenstein_lab/bdjohnson/jades_force/data/galsim/galsim_xy.dat")
+config.initial_catalog = os.path.expandvars("$SCRATCH/eisenstein_lab/bdjohnson/jades_force/data/galsim/galsim_rectified.fits")
 
 sd, sn = config.store_directory, config.store_name
 config.pixelstorefile = "{}/pixels_{}.h5".format(sd, sn)
@@ -42,7 +47,7 @@ config.nside_full = np.array([640, 640])         # number of pixels along one si
 # -----------------------
 # --- Patch Generation ---
 config.max_active_fraction = 0.1
-config.maxactive_per_patch = 15
+config.maxactive_per_patch = 20
 
 # -----------------------
 # --- HMC parameters ---

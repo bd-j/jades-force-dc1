@@ -30,7 +30,7 @@ Units
 ### Ancillary info
 
 * The PSF must be known and provided.  It should be representable as a mixture of gaussians (there is code to compute this mixture from an image)
-* There must be a catalog of initial (celestial or on-sky) positions
+* There must be a catalog of initial (celestial or on-sky) positions.  This will be preprocessed/rectified to have a number of qualities.
 * Ideally this catalog would contain rough estimates of the flux scale for the objects.
 * You must obtain the splined Gaussian mixture amplitudes for Sersic profile approximations.  A default set of splines is provided, but is appropriate for a particular range of half-light radii.
 
