@@ -76,8 +76,14 @@ def show_patch(fn, exposure_inds=[0, -1], show_fixed=True, show_active=False,
 
     disk = h5py.File(fn, "r")
     epaths = disk["epaths"][:]
-    active = disk["active"][:]
-    fixed = disk["fixed"][:]
+    try:
+        active = disk["active"][:]
+    except(KeyError):
+        active = None
+    try:
+        fixed = disk["fixed"][:]
+    except(KeyError):
+        fixed = None
     try:
         ref = disk["reference_coordinates"][:]
     except(KeyError):
@@ -100,10 +106,10 @@ def show_patch(fn, exposure_inds=[0, -1], show_fixed=True, show_active=False,
         ee = epath.decode("utf")
         axes[i, 0].set_ylabel(" ".join(ee.replace(".flx", "").split("_")[-3:]))
 
-        if show_active:
+        if show_active and (active is not None):
             ax = mark_sources(active["ra"], active["dec"], g,
                               ref_coords=ref, ax=ax, color="red")
-        if show_fixed:
+        if show_fixed and (fixed is not None):
             for j in range(3):
                 ax = axes[i, j]
                 ax = mark_sources(fixed["ra"], fixed["dec"], g,
@@ -112,7 +118,8 @@ def show_patch(fn, exposure_inds=[0, -1], show_fixed=True, show_active=False,
     titles = ["data", "data-model", "model"]
     [ax.set_title(t) for ax, t in zip(axes[0, :], titles)]
     ti = "Center index = {}\n ra, dec=({:10.7f}, {:10.7f})"
-    fig.suptitle(ti.format(active[0]["source_index"], active[0]["ra"], active[0]["dec"]))
+    if active is not None:
+        fig.suptitle(ti.format(active[0]["source_index"], active[0]["ra"], active[0]["dec"]))
     pl.show()
     return fig, axes, disk
 

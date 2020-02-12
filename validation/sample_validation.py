@@ -47,6 +47,7 @@ def checkout_region(catalog, i, j, buffer=20*0.03/3600.):
 
 if __name__ == "__main__":
 
+    verbose = True
     from config_validation import config
     parser = argparse.ArgumentParser()
     parser.add_argument("--patch_num", type=int, default=0)
@@ -79,6 +80,7 @@ if __name__ == "__main__":
     # --- checkout region (parent operation) ---
     catalog = fits.getdata(config.initial_catalog)
     region, active = checkout_region(catalog, patch_i, patch_j)
+    active["flux"][:] = 100.0
 
     # --- Build patch on CPU side ---
     patcher.build_patch(region, active, allbands=config.bandlist)
@@ -143,7 +145,7 @@ if __name__ == "__main__":
 
     # Failsafes
     from astropy.io import fits
-    fits.writeto("stest_chain_id{}.fits".format(active[0]["source_index"]), chain)
+    fits.writeto("stest_chain_id{}.fits".format(active[0]["source_index"]), chain, overwrite=True)
     logger.info("Got {} samples.".format(chain.shape[0]))
     logger.info("Last position is: \n {}".format(chain[-1, :]))
 
@@ -161,14 +163,14 @@ if __name__ == "__main__":
              "ncall": model.ncall,
              "chain": chain,
              "reference_coordinates": patcher.patch_reference_coordinates,
-             "region": np.array([region.ra, region.dec, region.radius])
+             "region": np.array([region.ra_min, region.dec_min, region.ra_max, region.dec_max])
              }
 
     if config.outfile:
         fn = config.outfile
     else:
-        fn = "validation_{}.h5".format(patchid)
-    dump_to_h5(fn, proposer.patch, active, fixed,
+        fn = "validation_{}.h5".format(patch_num)
+    dump_to_h5(fn, proposer.patch, active=active,
                pixeldatadict=pixr, otherdatadict=extra)
     logger.info("wrote patch data to {}".format(fn))
     logger.info("Done")

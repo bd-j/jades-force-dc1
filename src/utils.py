@@ -69,7 +69,7 @@ def dump_to_h5(filename, patch, active=None, fixed=None,
         for a, arr in otherdatadict.items():
             out.create_dataset(a, data=arr)
 
-        if active:
-            out.create_dataset("active", data=active)
-        if fixed:
-            out.create_dataset("fixed", data=fixed)
+        if active is not None:
+            out.create_dataset("active", data=np.array(active))
+        if fixed is not None:
+            out.create_dataset("fixed", data=np.array(fixed))
