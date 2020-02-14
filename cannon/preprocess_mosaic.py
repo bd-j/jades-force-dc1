@@ -128,4 +128,18 @@ if __name__ == "__main__":
     # Write the filled metastore
     metastore.write_to_file(config.metastorefile)
 
+
+    # deal with PSFs that now have a different pixel scale for LW
+    LW = ["F277W", "F335M", "F356W", "F410M", "F444W"]
+    import shutil
+    shutil.copy("{}/psf_jades_ng4.h5".format(sd), config.psfstorefile)
+    with h5py.File(config.psfstorefile, "a") as mpsf:
+        for b in LW:
+            pars = mpsf[b]["parameters"]
+            pars["xcen"] = pars["xcen"][:] * 2.
+            pars["ycen"] = pars["ycen"][:] * 2.
+            pars["Cxx"] = pars["Cxx"][:] * 4.
+            pars["Cyy"] = pars["Cyy"][:] * 4.
+            pars["Cxy"] = pars["Cxy"][:] * 4.
+
     print("done in {}s".format(time.time() - t))
