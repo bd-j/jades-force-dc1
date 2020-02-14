@@ -118,7 +118,7 @@ Single core job example slurm jobscript (change the log file directories)
 #SBATCH --mem-per-cpu=1000 # Memory per node in MB (see also --mem-per-cpu)
 #SBATCH -p gpu # Partition to submit to
 #SBATCH -t 06:00:00 # Runtime
-#SBATCH -J force_smoke_test
+#SBATCH -J forcepho
 #SBATCH -o  $SCRATCH/eisenstein_lab/bdjohnson/jades_force/logs/smoketest_%A_%a.out # Standard out goes to this file
 #SBATCH -e  $SCRATCH/eisenstein_lab/bdjohnson/jades_force/logs/smoketest%A_%a.err # Standard err goes to this file
 

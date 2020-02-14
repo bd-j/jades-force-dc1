@@ -47,8 +47,11 @@ def dump_to_h5(filename, patch, active=None, fixed=None,
     meta = ["D", "CW", "crpix", "crval"]
     with h5py.File(filename, "w") as out:
 
+        out.attrs["reference_coordinates"] = np.array(patch.patch_reference_coordinates)
+        out.attrs["bandlist"] = np.array(patch.bandlist, dtype="S")
+
         out.create_dataset("epaths", data=np.array(patch.epaths, dtype="S"))
-        out.create_dataset("bandlist", data=np.array(patch.bandlist, dtype="S"))
+        #out.create_dataset("bandlist", data=np.array(patch.bandlist, dtype="S"))
         out.create_dataset("exposure_start", data=patch.exposure_start)
 
         for band in patch.bandlist:

@@ -92,7 +92,7 @@ def show_patch(fn, exposure_inds=[0, -1], show_fixed=True, show_active=False,
     vtypes = ["data", "active_residual"]
     ne = len(exposure_inds)
 
-    fig, axes = pl.subplots(ne, 3, sharex="row", sharey="row")
+    fig, axes = pl.subplots(ne, 3, sharex="row", sharey="row", squeeze=False)
     for i, e in enumerate(exposure_inds):
         epath = epaths[e]
         g = disk[epath]
