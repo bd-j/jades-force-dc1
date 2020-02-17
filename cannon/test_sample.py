@@ -11,12 +11,14 @@ import pymc3 as pm
 import theano.tensor as tt
 
 # child side
+from forcepho.sources import Scene, Galaxy
 from forcepho.proposal import Proposer
 from forcepho.model import GPUPosterior, LogLikeWithGrad
 from jades_patch import JadesPatch
 from mc import prior_bounds
 
 # parent side
+from catalog import rectify_catalog, catalog_to_scene
 from dispatcher import SuperScene
 
 # Local
@@ -50,35 +52,43 @@ if __name__ == "__main__":
     else:
         logger = Logger(__name__)
 
-    ingest_kwargs = {"rotate": config.rotate,
-                     "reverse": config.reverse}
-
+    source_kwargs = {"splinedata": config.splinedatafile,
+                     "free_sersic": True}
     logger.info("rotate is {}".format(config.rotate))
     logger.info("reverse is {}".format(config.reverse))
 
     # --- Build ingredients (parent and child sides) ---
     # sourcecat = rectify_catalog(config.initial_catalog, **ingest_kwargs)
-    sceneDB = SuperScene(config.initial_catalog,
-                         maxactive_per_patch=config.maxactive_per_patch,
-                         ingest_kwargs=ingest_kwargs)
+    sourcecat = bands, header = rectify_catalog(config.initial_catalog,
+                                                rotate=config.rotate,
+                                                reverse=config.reverse)
+    sceneDB = SuperScene(sourcecat=sourcecat, bands=bands,
+                         maxactive_per_patch=config.maxactive_per_patch)
     logger.info("Made SceneDB")
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,
-                         pixelstore=config.pixelstorefile,
-                         splinedata=config.splinedatafile)
+                         pixelstore=config.pixelstorefile)
     logger.info("Made patch")
+    active_scene = Scene()
+    fixed_scene = Scene()
 
     # --- checkout region (parent operation) ---
     # seed_index = 444  # good source to build a scene from
     region, active, fixed = sceneDB.checkout_region(seed_index=config.seed_index)
+
+    # This could be done within JadesPatch
+    active_scene.from_catalog(active, bands, source_kwargs=source_kwargs)
+    fixed_scene.from_catalog(fixed, bands, source_kwargs=source_kwargs)
     logger.info("checked out scene with {} active sources".format(len(active)))
-    sr, sid, ra, dec = region.radius*3600, active[0]["source_index"], region.ra, region.dec
+
+    sr, sid = region.radius * 3600, active[0]["source_index"]
+    ra, dec = region.ra, region.dec
     logger.info("scene of radius {:3.2f} arcsec centered on source "
                 "{} at (ra, dec)=({}, {})".format(sr, sid, ra, dec))
 
     # --- Build patch on CPU side (child operation) ---
     # Note this is the *fixed* source metadata
-    patcher.build_patch(region, fixed, allbands=config.bandlist)
+    patcher.build_patch(region, scene=fixed_scene, allbands=config.bandlist)
     logger.info("built patch with {} fixed sources".format(len(fixed)))
     logger.info("Patch has {} pixels".format(len(patcher.data)))
     original = np.split(patcher.data, np.cumsum(patcher.exposure_N)[:-1])
@@ -100,7 +110,7 @@ if __name__ == "__main__":
 
     # --- Build active patch ---
     logger.info("Replacing cpu metadata with active sources")
-    patcher.pack_meta(active)
+    patcher.pack_meta(active_scene)
     p0 = patcher.scene.get_all_source_params().copy()
     logger.info("got active parameter vector")
 

@@ -33,82 +33,9 @@ def sourcecat_dtype(source_type=np.float64, bands=None):
     dt = [(t, np.int32) for t in tags]
     dt += [(c, source_type)
            for c in SHAPE_COLS]
-    dt += [(c, source_type, (nband,))
-           for c in [FLUX_COL]]
+    dt += [(c, source_type)
+           for c in bands]
     return np.dtype(dt)
-
-
-def scene_to_catalog(scene, band_ids, cat_dtype):
-    """Convert a scene to a structured ndarray of parameters.
-
-    Parameters
-    -----------
-    scene : Scene() instance
-        The scene, containing a list of sources
-
-    band_ids : list of ints or slice
-        The elements of the `"flux"` column in output catalog corresponding to
-        the the `flux` vector attribute of each source in the scene.
-    """
-    active = np.zeros(nactive, dtype=cat_dtype)
-    for i, row in enumerate(active):
-        s = scene.sources[i]
-        pars = s.ra, s.dec, s.q, s.pa, s.sersic, s.rh
-        for j, f in enumerate(SHAPE_COLS):
-            active[i][f] = pars[j]
-        active[i][FLUX_COL][band_ids] = s.flux
-    return active
-
-
-def catalog_to_scene(sourcepars, band_ids, filters,
-                     splinedata=None, free_sersic=True):
-    """Build a scene from a structured array of source parameters including
-    fluxes through a set of filters.
-
-    Parameters
-    ---------
-    sourcepars : structured ndarray
-        each row is a source.  The relevant columns are described by
-        SHAPE_COLS and FLUX_COL, and it should have an "id" column.
-
-    band_ids : list of ints or slice
-        The elements of the flux array in `sourcepars` corresponding to
-        the given filters.
-
-    filters : list of strings
-        The list of the band names that are being used for this scene.
-
-    splinedata : string
-        Path to the HDF5 file containing spline information.
-        This should be the actual spline information...
-
-    Returns
-    -------
-    scene: Scene object
-    """
-    #sourcepars = sourcepars.astype(np.float)
-    # get all sources
-    sources = []
-    for ii, pars in enumerate(sourcepars):
-        x, y, q, pa, n, rh = [pars[f] for f in SHAPE_COLS]
-        gid = pars["id"]
-        flux = np.atleast_1d(pars[FLUX_COL])
-        s = Galaxy(filters=filters, splinedata=splinedata,
-                   free_sersic=free_sersic)
-        s.global_id = gid
-        s.sersic = n
-        s.rh = np.clip(rh, 0.05, 0.20)
-        s.flux = flux[band_ids]
-        s.ra = x
-        s.dec = y
-        s.q = np.clip(q, 0.2, 0.9)
-        s.pa = pa
-        sources.append(s)
-
-    # generate scene
-    scene = Scene(sources)
-
-    return(scene)
 
 
 def rectify_catalog(sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=True):
@@ -155,6 +82,10 @@ def rectify_catalog(sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=Tr
     for f in cat.dtype.names:
         if f in sourcecat.dtype.names:
             sourcecat[f][:] = cat[f][:]
+
+    for i, b in enumerate(bands):
+        sourcecat[b][:] = cat["flux"][:, i]
+
     # --- Rectify shape columns ---
     sourcecat["nsersic"] = 3.0  # middle of range
     bad = ~np.isfinite(sourcecat["rhalf"])
