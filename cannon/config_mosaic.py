@@ -6,6 +6,9 @@
 import os
 import numpy as np
 from argparse import Namespace
+expandpath = os.path.expandvars
+pjoin = os.path.join
+
 config = Namespace()
 
 # -----------

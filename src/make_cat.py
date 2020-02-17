@@ -12,15 +12,67 @@ from astropy.wcs import WCS
 SHAPE_COLS = ["ra", "dec", "q", "pa", "nsersic", "rhalf"]
 
 
-def make_chaincat(filename):
+def fixed_aperture_fraction(nsersic, rhalf, rap):
+    """Compute the fraction of the flux that falls within a given radius of
+    the source center for a _circularized_ shape.  The circularization means
+    this is not the same as the fraction of flux of a galaxy that would fall
+    within a circular aperture placed on the galaxy image (which depends on q as
+    well)
 
+    Parameters
+    ----------
+    nsersic : float
+        The sersic index
+
+    rhalf : float
+        The half-light radius
+
+    rap : float
+        The aperture radius, in the same units as `rhalf` (usually arcsec)
+
+    Returns
+    -------
+    frac : float
+        The fraction of the total light that is enclosed within `rap`
+    """
+    from scipy.special import gammainc, gammaincinv
+    n = nsersic
+    # note gammaincinv is for the normalized gamma function, so...
+    b_n = gammaincinv(2 * n, 0.5)
+    x = b_n * (rap / rhalf)**(1./n)
+    frac = gammainc(2 * n, x)
+    return frac
+
+
+def make_chaincat(filename, apertures=[]):
+    """Make a catalog from the chain.  This essentially names the columns in
+    the `chain` dataset of the provided file and makes several transformations:
+    * ra           -> ra + reference_ra
+    * dec          -> dec + refeence_dec
+    * sqrt(a/b)    -> q
+    * pa (radians) -> pa (degrees)
+
+    Parameters
+    ----------
+    apertures : list of float, optional (default: [])
+       A list of aperture radii (in same units as rhalf).  Note these are for "circularized" profiles
+    """
     with h5py.File(filename, "r") as disk:
         chain = disk["chain"][:]
-        bands = disk["bandlist"][:]
-        ref = disk["reference_coordinates"][:]
         active = disk["active"][:]
+        try:
+            bands = disk["bandlist"][:]
+            ref = disk["reference_coordinates"][:]
+        except(KeyError):
+            bands = disk.attrs["bandlist"][:]
+            ref = disk.attrs["reference_coordinates"][:]
 
     bands = [b.decode("utf-8") for b in bands]
+
+    aper_fmt = "{}_aper{:.0f}mas"
+    aper_bands = []
+    for r in apertures:
+        aper_bands += [aper_fmt.format(b, r*1000) for b in bands]
 
     # --- Get sizes of things ----
     n_iter, n_param = chain.shape
@@ -32,7 +84,8 @@ def make_chaincat(filename):
 
     # --- generate dtype ---
     colnames = bands + SHAPE_COLS
-    cols = [("id", np.int)] + [(c, np.float, (n_iter,)) for c in colnames]
+    cols = ([("id", np.int), ("x", np.float, (n_iter,)), ("y", np.float, (n_iter,))] +
+            [(c, np.float, (n_iter,)) for c in colnames + aper_bands])
     dtype = np.dtype(cols)
 
     # --- make and fill catalog
@@ -48,6 +101,22 @@ def make_chaincat(filename):
     cat["pa"] = -np.rad2deg(cat["pa"])
 
     cat["id"] = active["source_index"]
+
+    if wcs is not None:
+        
+        x, y = wcs.all_world2pix(cat["ra"], cat["dec"], 1)
+        cat["x"] = x
+        cat["y"] = y
+
+    # add aperture fluxes
+    # this is dumb because the fractions are the same in each band
+    # but it makes the logic for the summary catalog easier
+    for r in apertures:
+        frac = fixed_aperture_fraction(cat["nsersic"], cat["rhalf"], r)
+        for b in bands:
+            aper_name = aper_fmt.format(b, r*1000)
+            cat[aper_name] = cat[b] * frac
+
     # document units and number of iterations
     # units: image_units, degrees, degrees, b/a, degrees E of North, sersic index, arcsec
     # n_iter
@@ -57,18 +126,19 @@ def make_chaincat(filename):
 def summary_cat(chaincat, estimate=np.mean, wcs=None):
     """Return point estimates and uncertaites for all parameters in a given
     chaincat
+
+    Parameters
+    ----------
+    wcs : optional
+        If given, use this WCS to convert celestial coordinates back into pixel coordinates.
     """
     efmt = "{}_unc"
 
     colnames = list(chaincat.dtype.names)
     _ = colnames.pop(colnames.index("id"))
     allnames = colnames + [efmt.format(c) for c in colnames]
-    dtype = [("id", np.int)] + [(c, np.float) for c in allnames]
-
-    if wcs is not None:
-        x, y = wcs.all_world2pix(chaincat["ra"], chaincat["dec"], 1)
-        chaincat["ra"] = x
-        chaincat["dec"] = y
+    dtype = ([("id", np.int), ("patchid", np.int)] +
+             [(c, np.float) for c in allnames])
 
     cat = np.zeros(len(chaincat), dtype=dtype)
     for i, row in enumerate(chaincat):
@@ -82,24 +152,31 @@ def summary_cat(chaincat, estimate=np.mean, wcs=None):
 if __name__ == "__main__":
 
     wcs = None
-    imname = os.path.expandvars("$HOME/Projects/jades_force/data/galsim/vrfnq_v0_sci.fits")
-    if imname is not None:
-        wcs = WCS(fits.getheader(imname))
-    search = "output/*patchid??.h5"
-    files = glob.glob(search)
+    imname = os.path.expandvars("$HOME/Projects/jades_force/data/2019-mini-challenge/mosaics/st/trimmed/F200W_bkgsub.fits")
+    wcs = WCS(fits.getheader(imname))
 
-    chaincats = [make_chaincat(f) for f in files]
-    summaries = [summary_cat(chains, wcs=wcs) for chains in chaincats]
+    pdir = os.path.expandvars("$HOME/Projects/jades_force/cannon/output/")
+    search = os.path.join(pdir, "*[0-9].h5")
+    files = glob.glob(search)
+    patchid = [int(os.path.basename(f).split("idx")[-1].replace(".h5", ""))
+               for f in files]
+
+    chaincats = [make_chaincat(f, apertures=[0.10]) for f in files]
 
     # get the source indicies of each row
     inds = [chains["id"] for chains in chaincats]
     order = np.argsort(np.concatenate(inds))
+    order = slice(None)
+
+    chaincat = np.concatenate(chaincats)[order]
+    fits.writeto("chains_mini-challenge-19_v0.fits", chaincat, overwrite=True)
+
+    summaries = []
+    for i, pid in enumerate(patchid):
+        summary = summary_cat(chaincats[i], wcs=wcs)
+        summary["patchid"] = pid
+        summary["id"] = chaincats[i]["id"]
+        summaries.append(summary)
 
     summary = np.concatenate(summaries)[order]
-    summary["id"] = np.concatenate(inds)[order]
-    fits.writeto("summary_galsim_v0.fits", summary, overwrite=True)
-
-    chains = [c[0] for c in chaincats]
-    chaincat = np.concatenate(chains)[order]
-
-    fits.writeto("chains_galsim_v0.fits", chaincat, overwrite=True)
+    fits.writeto("summary_mini-challenge-19_v0.fits", summary, overwrite=True)
