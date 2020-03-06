@@ -43,6 +43,20 @@ def get_color_sandro(cat, i, j):
     return -2.5*np.log10(fr), np.hypot(u1, u2)
 
 
+def show_chain(cat, ind, bins=20, range=None, hist=True):
+    fig, axes = pl.subplots(len(JWST_BANDS))
+    if hist:
+        for i, ax in enumerate(axes):
+           ax.hist(cat[ind][JWST_BANDS[i]], bins=bins, range=range)
+           ax.set_xlabel(JWST_BANDS[i])
+    else:
+        for i, ax in enumerate(axes):
+            ax.plot(cat[ind][JWST_BANDS[i]])
+            ax.set_ylabel(JWST_BANDS[i])
+
+    return fig, axes
+
+
 if __name__ == "__main__":
 
     sandro_file = expandpath("$HOME/Projects/jades_force/data/2019-mini-challenge/source_catalogs/forcepho_table_psf_matched_v5.0.fits")
