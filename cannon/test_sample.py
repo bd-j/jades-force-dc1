@@ -59,9 +59,9 @@ if __name__ == "__main__":
 
     # --- Build ingredients (parent and child sides) ---
     # sourcecat = rectify_catalog(config.initial_catalog, **ingest_kwargs)
-    sourcecat = bands, header = rectify_catalog(config.initial_catalog,
-                                                rotate=config.rotate,
-                                                reverse=config.reverse)
+    sourcecat, bands, header = rectify_catalog(config.initial_catalog,
+                                               rotate=config.rotate,
+                                               reverse=config.reverse)
     sceneDB = SuperScene(sourcecat=sourcecat, bands=bands,
                          maxactive_per_patch=config.maxactive_per_patch)
     logger.info("Made SceneDB")

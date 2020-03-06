@@ -52,8 +52,9 @@ class SuperScene:
                  sourcecat=None, bands=None):
 
         self.statefilename = statefile
-        if (sourcecat and bands):
-            self.set_catalog(sourcecat, bands)
+        if (sourcecat is not None):
+            self.set_catalog(sourcecat)
+        self.bands = bands
 
         self.n_active = 0
         self.n_fixed = 0
@@ -85,7 +86,7 @@ class SuperScene:
     def undone(self):
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
 
-    def set_catalog(self, sourcecat, bands, PAR_COLS=None):
+    def set_catalog(self, sourcecat):
         """Set the sourcecat attribute to the given catalog, doing some checks
         and setting some useful values
 
@@ -96,16 +97,15 @@ class SuperScene:
             the column names must include several specific column types.
         """
         for c in REQUIRED_COLUMNS:
-            assert c in sourcat.dtype.names, "required column {} is not present.".format(c)
+            assert c in sourcecat.dtype.names, "required column {} is not present.".format(c)
 
         self.sourcecat = sourcecat
-        self.bands = bands
         self.n_sources = len(self.sourcecat)
         self.cat_dtype = self.sourcecat.dtype
 
         # Store the initial coordinates, which are used to set positional priors
-        self.ra0 = scat["ra"][:]
-        self.dec0 = scat["dec"][:]
+        self.ra0 = sourcecat["ra"][:].copy()
+        self.dec0 = sourcecat["dec"][:].copy()
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
 
     def sky_to_scene(self, ra, dec):

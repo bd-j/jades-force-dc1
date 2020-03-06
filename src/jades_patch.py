@@ -60,7 +60,7 @@ class JadesPatch(Patch):
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
 
-    def build_patch(self, region, scene, allbands=JWST_BANDS):
+    def build_patch(self, region, sourcecat, allbands=JWST_BANDS):
         """Given a ragion and a source catalog, this method finds and packs up
         all the relevant meta- and pixel-data in a format suitable for transfer
         to the GPU
@@ -98,8 +98,8 @@ class JadesPatch(Patch):
         self.n_exp = len(self.hdrs)               # Number of exposures
 
         # --- Pack up all the data for the gpu ---
-        if scene:
-            self.pack_meta(scene)
+        if sourcecat is not None:
+            self.pack_meta(sourcecat)
         self.pack_pix(region)
 
     def pack_meta(self, sourcecat):
@@ -114,10 +114,17 @@ class JadesPatch(Patch):
         * wcses           [NEXP]
         * hdrs            [NEXP]
         * bands           [NEXP]
+
+        Parameters
+        ----------
+        sourcecat : ndarray of shape (n_sources,)
+            A structured array of source parameters.  Field names must correspond
+            to the forcepho native parameter names, with fluxes for each band in
+            their own column.
         """
         # --- Set the scene ---
         # build scene from catalog
-        self.set_scene(sourcecat)
+        self.scene = self.set_scene(sourcecat)
         # Set a reference coordinate near center of scene;
         # Subtract this from source coordinates
         self.patch_reference_coordinates = self.zerocoords(self.scene)
@@ -394,8 +401,7 @@ class JadesPatch(Patch):
         return data[sx, sy, :s2], data[sx, sy, s2:], xpix, ypix
 
     def set_scene(self, sourcecat):
-        """Restrict the sources in the scene to only have fluxes through the
-        specified filters
+        """Build a scene made of sources with the appropriate filters using 
 
         Parameters
         ----------

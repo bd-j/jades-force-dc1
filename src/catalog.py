@@ -13,12 +13,11 @@ from forcepho.sources import Scene, Galaxy
 
 
 __all__ = ["sourcecat_dtype", "rectify_catalog",
-           "scene_to_catalog", "catalog_to_scene",
            "SHAPE_COLS", "FLUX_COL", "PAR_COLS"]
 
 
 # name of GPU relevant parameters in the source catalog
-SHAPE_COLS = ["ra", "dec", "q", "pa", "nsersic", "rhalf"]
+SHAPE_COLS = ["ra", "dec", "q", "pa", "sersic", "rhalf"]
 FLUX_COL = "flux"
 PAR_COLS = ["id"] + [FLUX_COL] + SHAPE_COLS
 
@@ -73,7 +72,7 @@ def rectify_catalog(sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=Tr
     from astropy.io import fits
     cat = fits.getdata(sourcecatfile)
     header = fits.getheader(sourcecatfile)
-    bands = [b.upper() for b in header["FILTERS"].split(",")]
+    bands = [b.upper().strip() for b in header["FILTERS"].split(",")]
 
     n_sources = len(cat)
     cat_dtype = sourcecat_dtype(bands=bands)
@@ -87,7 +86,7 @@ def rectify_catalog(sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=Tr
         sourcecat[b][:] = cat["flux"][:, i]
 
     # --- Rectify shape columns ---
-    sourcecat["nsersic"] = 3.0  # middle of range
+    sourcecat["sersic"] = 3.0  # middle of range
     bad = ~np.isfinite(sourcecat["rhalf"])
     sourcecat["rhalf"][bad] = rhrange[0]
     sourcecat["rhalf"][:] = np.clip(sourcecat["rhalf"], *rhrange)
