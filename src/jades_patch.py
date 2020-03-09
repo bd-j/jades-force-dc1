@@ -379,12 +379,29 @@ class JadesPatch(Patch):
 
         Parameters
         -----------
-        epath, wcs, region
+        epath : string
+            The path to the exposure data in the HDF5 pixelstore,
+            in the form "[band]/[expID]"
+
+        wcs : An instance of astropy.wcs.WCS
+            The WCS for the exposure.
+
+        region : An instance of region.Region
+            The sky region within which to find pixels
 
         Returns
         ------------
-        data, ierr, x, y
+        data : ndrarry of shape (npix,) 
+            The fluxes of the valid pixels
 
+        ierr : ndarray of dhape (npix,)
+            The inverse errors of the valid pixels
+
+        xpix : ndarray of shape (npix,)
+            The x pixel coordinates in the exposure of the valid pixels
+
+        ypix : ndarray of shape (npix,)
+            The y-pixel coordinates in the exposure of the valid pixels
         """
         s2 = self.pixelstore.super_pixel_size**2
         # this is a (nside, nside, 4, 2) array of the full pixel coordinates of
@@ -401,13 +418,20 @@ class JadesPatch(Patch):
         return data[sx, sy, :s2], data[sx, sy, s2:], xpix, ypix
 
     def set_scene(self, sourcecat):
-        """Build a scene made of sources with the appropriate filters using 
+        """Build a scene made of sources with the appropriate filters using
 
         Parameters
         ----------
-        scene : A Scene object
-            All the sources must have `filternames` attributes that are
-            supersets of the provided `bands`
+        sourcecat : structured ndarray of shape (n_sources,)
+            A structured array of source parameters.  The fields of the of the
+            structured array must correspond to the fundamental parameters of
+            the `Galaxy` sourcetype ('ra', 'dec', 'q', 'pa', 'sersic', 'rhalf')
+            as well as have flux fields with the same column names as
+            `self.bandlist`.
+
+        Returns
+        -------
+        scene : An instance of sources.Scene
         """
         scene = Scene()
         scene.from_catalog(sourcecat, filternames=self.bandlist,

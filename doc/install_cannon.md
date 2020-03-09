@@ -150,7 +150,7 @@ Interactive Job (Odyssey)
 
 ```bash
 srun --pty -p gpu_test -t 0-01:00 --mem 1000 --gres=gpu:1 /bin/bash
-srun --pty -p gpu -t 0-04:00 --mem 1000 --gres=gpu:1 /bin/bash
+srun --pty -p gpu -t 0-06:00 --mem 1000 --gres=gpu:1 /bin/bash
 ```
 
 From the odyssey docs: While on GPU node, you can run `nvidia-smi` to get information about the assigned GPU
