@@ -37,7 +37,8 @@ def sourcecat_dtype(source_type=np.float64, bands=None):
     return np.dtype(dt)
 
 
-def rectify_catalog(sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=True):
+def rectify_catalog(sourcecatfile, rhrange=(0.05, 0.25), qrange=(0.2, 0.99),
+                    rotate=False, reverse=True):
     """Read the given catalog file and generate a `sourcecat` structured
     ndarray, which is an ndarray matched row-by-row but has all required
     columns.  Also forces parameters to be in valid ranges with valid formats
@@ -90,6 +91,7 @@ def rectify_catalog(sourcecatfile, rhrange=(0.03, 0.3), rotate=False, reverse=Tr
     bad = ~np.isfinite(sourcecat["rhalf"])
     sourcecat["rhalf"][bad] = rhrange[0]
     sourcecat["rhalf"][:] = np.clip(sourcecat["rhalf"], *rhrange)
+    sourcecat["q"][:] = np.clip(sourcecat["q"], *qrange)
     # rotate PA by +90 degrees but keep in the interval [-pi/2, pi/2]
     if rotate:
         p = sourcecat["pa"] > 0
