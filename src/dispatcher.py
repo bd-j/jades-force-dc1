@@ -17,14 +17,16 @@ except(ImportError):
     MPI.ANY_TAG = 1
 
 from scipy.spatial import cKDTree
-
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
 from region import CircularRegion
-# TODO: SuperScene should take a rectified catalog, not do the ingestion itself.
-from catalog import rectify_catalog, PAR_COLS
+
+
+REQUIRED_COLUMNS = ("ra", "dec", "rhalf",
+                    "source_index", "is_active", "is_valid",
+                    "n_iter", "n_patch")
 
 
 class SuperScene:
@@ -43,20 +45,17 @@ class SuperScene:
     over-writing the `seed_weight()` method
     """
 
-    def __init__(self, sourcecatfile, statefile="superscene.fits",  # disk locations
+    def __init__(self, statefile="superscene.fits",                 # disk locations
                  target_niter=200, maxactive_fraction=0.1,          # stopping criteria
                  maxactive_per_patch=20, nscale=3,                  # patch boundaries
                  boundary_radius=8., maxradius=5., minradius=1,     # patch boundaries
-                 ingest_kwargs={}):
+                 sourcecat=None, bands=None):
 
-        self.sourcefilename = sourcecatfile
         self.statefilename = statefile
-        self.ingest(sourcecatfile, **ingest_kwargs)
-        self.parameter_columns = PAR_COLS
-        #self.inactive_inds = list(range(self.n_sources))
-        #self.active_inds = []
+        if (sourcecat is not None):
+            self.set_catalog(sourcecat)
+        self.bands = bands
 
-        self.n_sources = len(self.sourcecat)
         self.n_active = 0
         self.n_fixed = 0
 
@@ -87,49 +86,26 @@ class SuperScene:
     def undone(self):
         return np.any(self.sourcecat["n_iter"] < self.target_niter)
 
-    def ingest(self, sourcecatfile, **rectify_kwargs):
-        """Read the given catalog file and generate the internal `sourcecat`
-        attribute, which is an ndarray matched row-by-row but has all required
-        columns.  This method could be subclassed to handle different catalog
-        formats.  Also populates the following attributes.
-            * sourcecat
-            * bands
-            * header
-            * n_sources
-            * cat_dtype
-            * ra0
-            * dec0
+    def set_catalog(self, sourcecat):
+        """Set the sourcecat attribute to the given catalog, doing some checks
+        and setting some useful values
 
         Parameters
         ----------
-        sourceatfile : string
-            Path to the FITS binary table representing the initilization
-            catalog. This file must have a header entry "FILTERS" giving a
-            comma-separated list of bands in the same order as the "flux"
-            column.
-
-        Extra Parameters
-        ----------------
-        rhrange : 2-tuple of floats, optional (default: 0.03, 0.3)
-            The range of half-light radii that is acceptable in arcsec.
-            Input radii will be clipped to this range.
-
-        rotate : bool, optional, default=False
-            Whether to rotate the PA by 90 degrees
-
-        reverse : bool, optional, default=True
-            Whether to reverse the direction of the PA (i.e. from Cw to CCW)
+        sourcecat : structured ndarray of shape (n_sources,)
+            A catalog of source parameters.  This is a structured array where
+            the column names must include several specific column types.
         """
-        scat, bands, header = rectify_catalog(sourcecatfile, **rectify_kwargs)
-        self.sourcecat = scat
-        self.bands = bands
-        self.header = header
-        self.n_sources = len(scat)
-        self.cat_dtype = scat.dtype
+        for c in REQUIRED_COLUMNS:
+            assert c in sourcecat.dtype.names, "required column {} is not present.".format(c)
+
+        self.sourcecat = sourcecat
+        self.n_sources = len(self.sourcecat)
+        self.cat_dtype = self.sourcecat.dtype
 
         # Store the initial coordinates, which are used to set positional priors
-        self.ra0 = scat["ra"][:]
-        self.dec0 = scat["dec"][:]
+        self.ra0 = sourcecat["ra"][:].copy()
+        self.dec0 = sourcecat["dec"][:].copy()
         self.sourcecat["source_index"][:] = np.arange(self.n_sources)
 
     def sky_to_scene(self, ra, dec):

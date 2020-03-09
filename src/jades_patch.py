@@ -10,7 +10,6 @@ from forcepho.stamp import scale_at_sky
 
 from storage import MetaStore, PixelStore, PSFStore
 from storage import PSF_COLS
-from catalog import catalog_to_scene
 
 JWST_BANDS = ["F090W", "F115W", "F150W", "F200W",
               "F277W", "F335M", "F356W", "F410M", "F444W"]
@@ -53,16 +52,15 @@ class JadesPatch(Patch):
         self.pix_dtype = pix_dtype
         self.return_residual = return_residual
 
-        self.splinedata = splinedata
         self.metastore = MetaStore(metastore)
         self.psfstore = PSFStore(psfstore)
         self.pixelstore = PixelStore(pixelstore)
+        self.splinedata = splinedata
 
         self.patch_reference_coordinates = np.zeros(2)
         self.wcs_origin = 0
 
-    def build_patch(self, region, sourcecat,
-                    allbands=JWST_BANDS):
+    def build_patch(self, region, sourcecat, allbands=JWST_BANDS):
         """Given a ragion and a source catalog, this method finds and packs up
         all the relevant meta- and pixel-data in a format suitable for transfer
         to the GPU
@@ -100,7 +98,8 @@ class JadesPatch(Patch):
         self.n_exp = len(self.hdrs)               # Number of exposures
 
         # --- Pack up all the data for the gpu ---
-        self.pack_meta(sourcecat)
+        if sourcecat is not None:
+            self.pack_meta(sourcecat)
         self.pack_pix(region)
 
     def pack_meta(self, sourcecat):
@@ -108,28 +107,36 @@ class JadesPatch(Patch):
         this data is scene/source dependent, so in this way we can change the
         scene without repacking the pixel data.  This requires the following
         attributes to have been set:
-        * splinedata
-        * uniq_bands  [NBAND]
-        * bandlist    [NBAND]
-        * wcses       [NEXP]
-        * hdrs        [NEXP]
-        * bands       [NEXP]
+        * uniq_bands      [NBAND]
+        * bandlist        [NBAND]
+        * n_exp_per_band  [ NBAND]
+        * n_exp           [1]
+        * wcses           [NEXP]
+        * hdrs            [NEXP]
+        * bands           [NEXP]
+
+        Parameters
+        ----------
+        sourcecat : ndarray of shape (n_sources,)
+            A structured array of source parameters.  Field names must correspond
+            to the forcepho native parameter names, with fluxes for each band in
+            their own column.
         """
         # --- Set the scene ---
-        self.scene = self.set_scene(sourcecat, self.uniq_bands, self.bandlist,
-                                    splinedata=self.splinedata)
+        # build scene from catalog
+        self.scene = self.set_scene(sourcecat)
         # Set a reference coordinate near center of scene;
         # Subtract this from source coordinates
         self.patch_reference_coordinates = self.zerocoords(self.scene)
         # Cache number of sources
         self.n_sources = len(self.scene.sources)
 
-        self.pack_source_metadata(self.scene)
-        self.pack_astrometry(self.wcses, self.scene)
-        self.pack_fluxcal(self.hdrs)
-        self.pack_psf(self.bands, self.wcses, self.scene)
+        self._pack_source_metadata(self.scene)
+        self._pack_astrometry(self.wcses, self.scene)
+        self._pack_fluxcal(self.hdrs)
+        self._pack_psf(self.bands, self.wcses, self.scene)
 
-    def pack_source_metadata(self, scene, dtype=None):
+    def _pack_source_metadata(self, scene, dtype=None):
         """We don't actually pack sources in the Patch; that happens
         in a Proposal.  But we do have some global constants related to
         sources, such as the total number of soures and number of Sersic
@@ -158,7 +165,7 @@ class JadesPatch(Patch):
         self.rad2 = np.empty(self.n_radii, dtype=dtype)
         self.rad2[:] = scene.sources[0].radii**2
 
-    def pack_astrometry(self, wcses, scene, dtype=None):
+    def _pack_astrometry(self, wcses, scene, dtype=None):
         """The sources need to know their local astrometric transformation
         matrices (and photometric conversions) in each exposure. We need to
         calculate these from header/meta information and send data to the GPU
@@ -178,14 +185,15 @@ class JadesPatch(Patch):
         self.CW = np.empty((self.n_exp, self.n_sources, 2, 2), dtype=dtype)
         self.crpix = np.empty((self.n_exp, 2), dtype=dtype)
         self.crval = np.empty((self.n_exp, 2), dtype=dtype)
-        # FIXME: this is a little hacky; what if zerocoords hasn't been called after the scene changed?
+        # FIXME: this is a little hacky;
+        # what if zerocoords hasn't been called after the scene changed?
         ra0, dec0 = self.patch_reference_coordinates
 
         for j, wcs in enumerate(wcses):
             # TODO - should do a better job getting a matched crpix/crval pair
             # near the center of a patch
             # TODO: Source specific crpix, crval pairs?
-            # Using reference coordinates of patch for crval and zero-indexed crpix
+            # Using ref coords of patch for crval and zero-indexed crpix
             self.crval[j] = np.zeros(2, dtype=self.meta_dtype)
             self.crpix[j] = wcs.all_world2pix(ra0, dec0, 0)
             for i, s in enumerate(scene.sources):
@@ -193,11 +201,12 @@ class JadesPatch(Patch):
                 CW_mat, D_mat = scale_at_sky(ssky, wcs)
                 self.D[j, i] = D_mat
                 self.CW[j, i] = CW_mat
-                # self.crval[j, i] = ssky - self.patch_reference_coordinates
-                # self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], origin=0)
+                # source specific:
+                #self.crval[j, i] = ssky - self.patch_reference_coordinates
+                #self.crpix[j, i] = wcs.all_world2pix(ssky[0], ssky[1], origin=0)
 
-    def pack_fluxcal(self, hdrs, tweakphot=None, dtype=None):
-        """A nominal lux calibrartion has been applied to all images,
+    def _pack_fluxcal(self, hdrs, tweakphot=None, dtype=None):
+        """A nominal flux calibrartion has been applied to all images,
         but here we allow for tweaks to the flux calibration.
 
         Fills in the following array:
@@ -213,7 +222,7 @@ class JadesPatch(Patch):
             for j, hdr in enumerate(hdrs):
                 self.G[j] = hdr[tweakphot]
 
-    def pack_psf(self, bands, wcses, scene, dtype=None, psf_dtype=None):
+    def _pack_psf(self, bands, wcses, scene, dtype=None, psf_dtype=None):
         """Each Sersic radius bin has a number of Gaussians associated with it
         from the PSF. The number of these will be constant in a given band, but
         the Gaussian parameters vary with source and exposure.
@@ -324,6 +333,7 @@ class JadesPatch(Patch):
         Parameters
         ----------
         region : region.Region instance
+            Exposures will be found which overlap this region
 
         bandlist : list of str
             A list of band names to search for images.
@@ -390,35 +400,19 @@ class JadesPatch(Patch):
 
         return data[sx, sy, :s2], data[sx, sy, s2:], xpix, ypix
 
-    def set_scene(self, sourcepars, band_ids, filters,
-                  splinedata=None, free_sersic=True):
-        """Build a scene from a set of source parameters and fluxes through a
-        set of filters.
+    def set_scene(self, sourcecat):
+        """Build a scene made of sources with the appropriate filters using 
 
         Parameters
-        ---------
-        sourcepars : structured ndarray
-            each row is a source.  It should unpack as:
-            id, ra, dec, q, pa, n, rh, flux, flux_unc
-
-        band_ids : list of ints or slice
-            The elements of the flux array in `sourcepars` corresponding to
-            the given filters.
-
-        filters : list of strings
-            The list of the band names that are being used for this patch
-
-        splinedata : string
-            Path to the HDF5 file containing spline information.
-            This should be the actual spline information...
-
-        Returns
-        -------
-        scene: Scene object
+        ----------
+        scene : A Scene object
+            All the sources must have `filternames` attributes that are
+            supersets of the provided `bands`
         """
-        return catalog_to_scene(sourcepars, band_ids, filters,
-                                splinedata=splinedata,
-                                free_sersic=free_sersic)
+        scene = Scene()
+        scene.from_catalog(sourcecat, filternames=self.bandlist,
+                           source_type=Galaxy, splinedata=self.splinedata)
+        return scene
 
     def zerocoords(self, scene, sky_zero=None):
         """Reset (in-place) the celestial zero point of the image metadata and
