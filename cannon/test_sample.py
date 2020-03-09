@@ -11,14 +11,13 @@ import pymc3 as pm
 import theano.tensor as tt
 
 # child side
-from forcepho.sources import Scene, Galaxy
+from jades_patch import JadesPatch
 from forcepho.proposal import Proposer
 from forcepho.model import GPUPosterior, LogLikeWithGrad
-from jades_patch import JadesPatch
 from mc import prior_bounds
 
 # parent side
-from catalog import rectify_catalog, catalog_to_scene
+from catalog import rectify_catalog
 from dispatcher import SuperScene
 
 # Local
@@ -26,7 +25,6 @@ from dispatcher import SuperScene
 from utils import Logger, dump_to_h5
 parser = argparse.ArgumentParser()
 theano.gof.compilelock.set_lock_status(False)
-
 
 if __name__ == "__main__":
 
@@ -52,8 +50,6 @@ if __name__ == "__main__":
     else:
         logger = Logger(__name__)
 
-    source_kwargs = {"splinedata": config.splinedatafile,
-                     "free_sersic": True}
     logger.info("rotate is {}".format(config.rotate))
     logger.info("reverse is {}".format(config.reverse))
 
@@ -67,18 +63,13 @@ if __name__ == "__main__":
     logger.info("Made SceneDB")
     patcher = JadesPatch(metastore=config.metastorefile,
                          psfstore=config.psfstorefile,
-                         pixelstore=config.pixelstorefile)
+                         pixelstore=config.pixelstorefile,
+                         splinedata=config.splinedatafile)
     logger.info("Made patch")
-    active_scene = Scene()
-    fixed_scene = Scene()
 
     # --- checkout region (parent operation) ---
     # seed_index = 444  # good source to build a scene from
     region, active, fixed = sceneDB.checkout_region(seed_index=config.seed_index)
-
-    # This could be done within JadesPatch
-    active_scene.from_catalog(active, bands, source_kwargs=source_kwargs)
-    fixed_scene.from_catalog(fixed, bands, source_kwargs=source_kwargs)
     logger.info("checked out scene with {} active sources".format(len(active)))
 
     sr, sid = region.radius * 3600, active[0]["source_index"]
@@ -88,7 +79,7 @@ if __name__ == "__main__":
 
     # --- Build patch on CPU side (child operation) ---
     # Note this is the *fixed* source metadata
-    patcher.build_patch(region, scene=fixed_scene, allbands=config.bandlist)
+    patcher.build_patch(region, fixed, allbands=config.bandlist)
     logger.info("built patch with {} fixed sources".format(len(fixed)))
     logger.info("Patch has {} pixels".format(len(patcher.data)))
     original = np.split(patcher.data, np.cumsum(patcher.exposure_N)[:-1])
@@ -110,7 +101,7 @@ if __name__ == "__main__":
 
     # --- Build active patch ---
     logger.info("Replacing cpu metadata with active sources")
-    patcher.pack_meta(active_scene)
+    patcher.pack_meta(active)
     p0 = patcher.scene.get_all_source_params().copy()
     logger.info("got active parameter vector")
 
