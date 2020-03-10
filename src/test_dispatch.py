@@ -11,7 +11,7 @@ from argparse import Namespace
 
 
 # parent side
-from dispatcher import SuperScene, MPIQueue
+from forcepho.dispatcher import SuperScene, MPIQueue
 
 
 # child side

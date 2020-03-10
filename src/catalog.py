@@ -9,7 +9,6 @@ Also defines the standard source catalog data type.
 
 
 import numpy as np
-from forcepho.sources import Scene, Galaxy
 
 
 __all__ = ["sourcecat_dtype", "rectify_catalog",

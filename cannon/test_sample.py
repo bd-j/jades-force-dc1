@@ -11,14 +11,14 @@ import pymc3 as pm
 import theano.tensor as tt
 
 # child side
-from jades_patch import JadesPatch
+from forcepho.patches import JadesPatch
 from forcepho.proposal import Proposer
 from forcepho.model import GPUPosterior, LogLikeWithGrad
 from mc import prior_bounds
 
 # parent side
 from catalog import rectify_catalog
-from dispatcher import SuperScene
+from forcepho.dispatcher import SuperScene
 
 # Local
 #from catalog import rectify_catalog, catalog_to_scene, scene_to_catalog
